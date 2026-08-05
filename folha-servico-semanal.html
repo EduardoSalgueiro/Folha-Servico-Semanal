@@ -103,6 +103,17 @@
     max-width:90%; text-align:center; white-space:normal;
   }
   .toast.show{opacity:1;}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(30,36,29,.55); display:none;
+    align-items:center; justify-content:center; z-index:60; padding:20px;
+  }
+  .modal-box{background:#fff; border-radius:14px; padding:20px; max-width:380px; width:100%;}
+  .modal-box p{margin:0 0 18px; font-size:14px; color:var(--text); white-space:pre-line; line-height:1.5;}
+  .modal-box .actions{display:flex; gap:10px;}
+  .modal-box button{flex:1; padding:12px; border-radius:9px; border:none; font-size:13.5px; font-weight:600; font-family:inherit;}
+  .modal-box .btn-cancel{background:#fff; border:1.5px solid var(--line); color:var(--text-mute);}
+  .modal-box .btn-confirm{background:var(--rust); color:#fff;}
 </style>
 </head>
 <body>
@@ -200,6 +211,16 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box">
+    <p id="confirmModalMsg"></p>
+    <div class="actions">
+      <button class="btn-cancel" id="confirmModalNo">Cancelar</button>
+      <button class="btn-confirm" id="confirmModalYes">Continuar mesmo assim</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
@@ -455,13 +476,36 @@ function renderEntries(){
 }
 renderEntries();
 
-document.getElementById('btnSend').addEventListener('click', async () => {
+function showConfirmModal(message, onConfirm){
+  const overlay = document.getElementById('confirmModal');
+  document.getElementById('confirmModalMsg').textContent = message;
+  overlay.style.display = 'flex';
+  const btnYes = document.getElementById('confirmModalYes');
+  const btnNo = document.getElementById('confirmModalNo');
+  const cleanup = () => { overlay.style.display = 'none'; btnYes.onclick = null; btnNo.onclick = null; };
+  btnYes.onclick = () => { cleanup(); onConfirm(); };
+  btnNo.onclick = cleanup;
+}
+
+document.getElementById('btnSend').addEventListener('click', () => {
   const nome = document.getElementById('nome').value;
   const semana = document.getElementById('semana').value;
   if(!nome){ showToast('Seleciona o colaborador'); return; }
   if(!semana){ showToast('Indica a semana'); return; }
   if(entries.length === 0){ showToast('Adiciona pelo menos um serviço'); return; }
-  if(!confirmarSeIncompleto()) return;
+
+  const incompletos = diasIncompletos();
+  if(incompletos.length > 0){
+    const lista = incompletos.map(i => `• ${i.dt}: faltam ${i.falta.toFixed(1)}h`).join('\n');
+    showConfirmModal(`Atenção — há dias com menos de 8h registadas:\n\n${lista}\n\nContinuar mesmo assim?`, enviarFolha);
+    return;
+  }
+  enviarFolha();
+});
+
+async function enviarFolha(){
+  const nome = document.getElementById('nome').value;
+  const semana = document.getElementById('semana').value;
 
   const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   const rows = entries.map(e => {
@@ -510,11 +554,8 @@ document.getElementById('btnSend').addEventListener('click', async () => {
       return;
     }catch(err){
       if(err.name === 'AbortError'){ showToast('Envio cancelado'); return; }
-      alert('[Diagnóstico temporário] A partilha falhou: ' + err.name + ' — ' + (err.message || 'sem mensagem'));
       // outros erros: segue para a transferência manual abaixo
     }
-  } else {
-    alert('[Diagnóstico temporário] Este browser não oferece partilha direta de ficheiros.\nnavigator.share existe? ' + (!!navigator.share) + '\nnavigator.canShare existe? ' + (!!navigator.canShare));
   }
 
   const url = URL.createObjectURL(blob);
@@ -523,7 +564,7 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast('Ficheiro guardado — envia-o agora pelo WhatsApp');
-});
+}
 
 document.getElementById('btnSave').addEventListener('click', async () => {
   const nome = document.getElementById('nome').value.trim();
