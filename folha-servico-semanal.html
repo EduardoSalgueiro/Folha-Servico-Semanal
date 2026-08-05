@@ -510,8 +510,11 @@ document.getElementById('btnSend').addEventListener('click', async () => {
       return;
     }catch(err){
       if(err.name === 'AbortError'){ showToast('Envio cancelado'); return; }
+      alert('[Diagnóstico temporário] A partilha falhou: ' + err.name + ' — ' + (err.message || 'sem mensagem'));
       // outros erros: segue para a transferência manual abaixo
     }
+  } else {
+    alert('[Diagnóstico temporário] Este browser não oferece partilha direta de ficheiros.\nnavigator.share existe? ' + (!!navigator.share) + '\nnavigator.canShare existe? ' + (!!navigator.canShare));
   }
 
   const url = URL.createObjectURL(blob);
