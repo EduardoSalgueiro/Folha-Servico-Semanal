@@ -500,21 +500,25 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   const blob = new Blob([wbArray], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const file = new File([blob], filename, {type: blob.type});
 
+  // Tenta abrir logo o menu de partilha (WhatsApp incluído) — tem de ser a primeira coisa
+  // a acontecer depois do toque no botão, senão o telemóvel deixa de reconhecer a ação
+  // como iniciada pelo utilizador e recusa a partilha.
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({ files:[file], title:filename, text:`Folha de serviço — ${nome} — Semana ${semana}` });
+      showToast('Folha enviada ✓');
+      return;
+    }catch(err){
+      if(err.name === 'AbortError'){ showToast('Envio cancelado'); return; }
+      // outros erros: segue para a transferência manual abaixo
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
-
-  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-    try{
-      await navigator.share({ files:[file], title:filename, text:`Folha de serviço — ${nome} — Semana ${semana}` });
-      showToast('Ficheiro guardado no telemóvel e enviado ✓');
-      return;
-    }catch(err){
-      if(err.name === 'AbortError'){ showToast('Ficheiro guardado no telemóvel (envio cancelado)'); return; }
-    }
-  }
   showToast('Ficheiro guardado — envia-o agora pelo WhatsApp');
 });
 
