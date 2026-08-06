@@ -227,7 +227,7 @@
 <script>
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
 const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manutenção sistema de rega','Vacas','Outros (Agricultura)','Monte/Casa Moura','Casas'];
-const LOCAIS = ['Manantiz','Bico','Ent. Drtª','Ent. Esqdª','24 Horas','Frente Monte','Trás do Monte','Poço','Várzea','Vacas','Charnequinha','Charnequinha Nova Plantação'];
+const LOCAIS = ['Manantiz','Bico','Ent. Drtª','Ent. Esqdª','24 Horas','Frente Monte','Trás do Monte','Poço','Várzea','Vacas','Charnequinha','Charnequinha Nova Plantação','Outro'];
 
 let tipo = 'com';
 let entries = [];
@@ -355,6 +355,7 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   if(!servicoSel){ showToast('Seleciona o serviço'); return; }
   if(!local){ showToast('Seleciona o local'); return; }
   if(servicoSel === 'Outros (Agricultura)' && !outroDesc){ showToast('Descreve o serviço "Outros"'); return; }
+  if(local === 'Outro' && !obs){ showToast('Descreve o local em Observações'); return; }
 
   entries.push({
     tipo, data, horaIni, horaFim, extras: extras || '0',
