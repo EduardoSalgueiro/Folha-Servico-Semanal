@@ -1,0 +1,17 @@
+{
+  "name": "Monte de Sampaio — Folha de Serviço",
+  "short_name": "Folha de Serviço",
+  "start_url": "./folha-servico-semanal.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FAF9F5",
+  "theme_color": "#3F6029",
+  "icons": [
+    {
+      "src": "./icon.jpg",
+      "sizes": "300x275",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
