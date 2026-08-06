@@ -409,11 +409,17 @@ function horasEntre(ini,fim){
 function getDailyTotals(){
   const map = new Map(); // data -> {normal, extras, servicos:[]}
   entries.forEach(e => {
-    if(!map.has(e.data)) map.set(e.data, {normal:0, extras:0, servicos:[]});
+    if(!map.has(e.data)) map.set(e.data, {trabalhadas:0, extras:0, servicos:[]});
     const d = map.get(e.data);
-    d.normal += horasEntre(e.horaIni, e.horaFim);
+    d.trabalhadas += horasEntre(e.horaIni, e.horaFim);
     d.extras += Number(e.extras||0);
     d.servicos.push(e);
+  });
+  // Horários que ultrapassem as 8h/dia contam automaticamente como extra,
+  // somando-se às extras escritas à mão (ex.: uma chamada fora de horário).
+  map.forEach(d => {
+    d.normal = Math.min(8, d.trabalhadas);
+    d.extras += Math.max(0, d.trabalhadas - 8);
   });
   return map;
 }
