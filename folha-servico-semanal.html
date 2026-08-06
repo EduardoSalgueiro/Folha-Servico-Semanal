@@ -554,16 +554,19 @@ async function enviarFolha(){
       return;
     }catch(err){
       if(err.name === 'AbortError'){ showToast('Envio cancelado'); return; }
+      alert('[Diagnóstico temporário] A partilha falhou: ' + err.name + ' — ' + (err.message || 'sem mensagem'));
       // outros erros: segue para a transferência manual abaixo
     }
+  } else {
+    alert('[Diagnóstico temporário] Partilha de ficheiros indisponível.\nnavigator.share: ' + (!!navigator.share) + '\nnavigator.canShare: ' + (!!navigator.canShare) + '\ncanShare(file): ' + (navigator.canShare ? navigator.canShare({files:[file]}) : 'n/d'));
   }
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Ficheiro guardado — envia-o agora pelo WhatsApp');
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  showToast('Ficheiro guardado em Transferências — abre o WhatsApp e anexa-o manualmente');
 }
 
 document.getElementById('btnSave').addEventListener('click', async () => {
