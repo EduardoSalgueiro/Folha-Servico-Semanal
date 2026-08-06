@@ -406,20 +406,37 @@ function horasEntre(ini,fim){
   return diff;
 }
 
-function getDailyTotals(){
-  const map = new Map(); // data -> {normal, extras, servicos:[]}
-  entries.forEach(e => {
-    if(!map.has(e.data)) map.set(e.data, {trabalhadas:0, extras:0, servicos:[]});
-    const d = map.get(e.data);
-    d.trabalhadas += horasEntre(e.horaIni, e.horaFim);
-    d.extras += Number(e.extras||0);
-    d.servicos.push(e);
+// Fonte única de verdade: divide as entradas de um dia em horas normais/extra,
+// usada na pré-visualização, nos registos guardados e na exportação Excel.
+// Horas trabalhadas que ultrapassem 8h/dia (por ordem cronológica) contam como
+// extra, somando-se às extras escritas à mão em cada entrada.
+function distribuirNormaisExtras(entriesDoDia){
+  const ordenadas = [...entriesDoDia].sort((a,b) => a.horaIni.localeCompare(b.horaIni));
+  let acumulado = 0;
+  const resultado = new Map(); // entrada -> {normal, extra}
+  ordenadas.forEach(e => {
+    const trabalhadas = horasEntre(e.horaIni, e.horaFim);
+    const disponivelNormal = Math.max(0, 8 - acumulado);
+    const normal = Math.min(trabalhadas, disponivelNormal);
+    const extra = (trabalhadas - normal) + Number(e.extras || 0);
+    acumulado += trabalhadas;
+    resultado.set(e, { normal, extra });
   });
-  // Horários que ultrapassem as 8h/dia contam automaticamente como extra,
-  // somando-se às extras escritas à mão (ex.: uma chamada fora de horário).
-  map.forEach(d => {
-    d.normal = Math.min(8, d.trabalhadas);
-    d.extras += Math.max(0, d.trabalhadas - 8);
+  return resultado;
+}
+
+function getDailyTotals(){
+  const porDia = new Map(); // data -> [entradas]
+  entries.forEach(e => {
+    if(!porDia.has(e.data)) porDia.set(e.data, []);
+    porDia.get(e.data).push(e);
+  });
+  const map = new Map(); // data -> {normal, extras, servicos:[]}
+  porDia.forEach((lista, data) => {
+    const dist = distribuirNormaisExtras(lista);
+    let normal = 0, extras = 0;
+    lista.forEach(e => { const v = dist.get(e); normal += v.normal; extras += v.extra; });
+    map.set(data, { normal, extras, servicos: lista });
   });
   return map;
 }
@@ -516,14 +533,18 @@ async function enviarFolha(){
   const nome = document.getElementById('nome').value;
   const semana = document.getElementById('semana').value;
 
+  const porDia = new Map();
+  entries.forEach(e => {
+    if(!porDia.has(e.data)) porDia.set(e.data, []);
+    porDia.get(e.data).push(e);
+  });
+  const distribuicao = new Map();
+  porDia.forEach(lista => { distribuirNormaisExtras(lista).forEach((v,k) => distribuicao.set(k, v)); });
+
   const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   const rows = entries.map(e => {
     const d = new Date(e.data + 'T00:00:00');
-    const totalH = (() => {
-      const [h1,m1]=e.horaIni.split(':').map(Number), [h2,m2]=e.horaFim.split(':').map(Number);
-      let diff = (h2*60+m2 - (h1*60+m1))/60; if(diff<0) diff+=24;
-      return Math.round((diff + Number(e.extras||0))*100)/100;
-    })();
+    const { normal, extra } = distribuicao.get(e);
     return {
       'Nome': nome,
       'Semana': semana,
@@ -534,14 +555,15 @@ async function enviarFolha(){
       'Local': e.local,
       'Das': e.horaIni,
       'Às': e.horaFim,
-      'Extras (h)': Number(e.extras || 0),
-      'Total Horas': totalH,
+      'Horas Normais': Math.round(normal*100)/100,
+      'Horas Extra': Math.round(extra*100)/100,
+      'Total Horas': Math.round((normal+extra)*100)/100,
       'Obs.': e.obs
     };
   });
 
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{wch:14},{wch:10},{wch:11},{wch:9},{wch:10},{wch:20},{wch:16},{wch:7},{wch:7},{wch:9},{wch:11},{wch:24}];
+  ws['!cols'] = [{wch:14},{wch:10},{wch:11},{wch:9},{wch:10},{wch:20},{wch:16},{wch:7},{wch:7},{wch:12},{wch:10},{wch:11},{wch:24}];
   const lastCol = XLSX.utils.encode_col(rows.length ? Object.keys(rows[0]).length - 1 : 11);
   ws['!autofilter'] = { ref: `A1:${lastCol}${rows.length + 1}` };
   const wb = XLSX.utils.book_new();
@@ -626,14 +648,18 @@ async function loadSaved(){
     }
     items.sort((a,b) => (b.semana||'').localeCompare(a.semana||''));
     wrap.innerHTML = items.map(it => {
-      const totalH = it.entries.reduce((s,e)=>{
-        const [h1,m1]=e.horaIni.split(':').map(Number), [h2,m2]=e.horaFim.split(':').map(Number);
-        let diff = (h2*60+m2 - (h1*60+m1))/60; if(diff<0) diff+=24;
-        return s + diff + Number(e.extras||0);
-      },0);
+      const porDia = new Map();
+      it.entries.forEach(e => {
+        if(!porDia.has(e.data)) porDia.set(e.data, []);
+        porDia.get(e.data).push(e);
+      });
+      let normalTotal = 0, extraTotal = 0;
+      porDia.forEach(lista => {
+        distribuirNormaisExtras(lista).forEach(v => { normalTotal += v.normal; extraTotal += v.extra; });
+      });
       return `<div class="saved-week">
         <div class="hd"><span>${esc(it.nome)}</span><span class="mono">Sem. ${esc(it.semana)}</span></div>
-        <div class="stat">${it.entries.length} serviços · ${totalH.toFixed(1)}h registadas</div>
+        <div class="stat">${it.entries.length} serviços · ${normalTotal.toFixed(1)}h normais${extraTotal>0?` + ${extraTotal.toFixed(1)}h extra`:''}</div>
       </div>`;
     }).join('');
   }catch(err){
