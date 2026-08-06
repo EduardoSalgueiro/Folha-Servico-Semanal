@@ -554,11 +554,8 @@ async function enviarFolha(){
       return;
     }catch(err){
       if(err.name === 'AbortError'){ showToast('Envio cancelado'); return; }
-      alert('[Diagnóstico temporário] A partilha falhou: ' + err.name + ' — ' + (err.message || 'sem mensagem'));
-      // outros erros: segue para a transferência manual abaixo
+      // partilha indisponível/recusada neste aparelho: segue para a transferência manual abaixo
     }
-  } else {
-    alert('[Diagnóstico temporário] Partilha de ficheiros indisponível.\nnavigator.share: ' + (!!navigator.share) + '\nnavigator.canShare: ' + (!!navigator.canShare) + '\ncanShare(file): ' + (navigator.canShare ? navigator.canShare({files:[file]}) : 'n/d'));
   }
 
   const url = URL.createObjectURL(blob);
