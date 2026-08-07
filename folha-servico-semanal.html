@@ -654,8 +654,13 @@ async function enviarFolha(){
   const ficheiroPreferido = isAndroid ? csvFile : file;
   const textoPreferido = isAndroid ? textoPartilha + ' (CSV — abre bem no Excel)' : textoPartilha;
 
+  // O WhatsApp ignora sempre o texto que acompanha um ficheiro partilhado (não
+  // aparece como legenda) — por isso copia-se para a área de transferência,
+  // para o colaborador só ter de colar na legenda em vez de escrever à mão.
+  try{ await navigator.clipboard.writeText(`${nome} — Semana ${semana}`); }catch(err){ /* sem acesso à área de transferência — segue sem copiar */ }
+
   let resultado = await tentarPartilhar(ficheiroPreferido, textoPreferido);
-  if(resultado === 'enviado'){ showToast(isAndroid ? 'Folha enviada (CSV) ✓' : 'Folha enviada ✓'); resetBotoesEnvio(); return; }
+  if(resultado === 'enviado'){ showToast((isAndroid ? 'Folha enviada (CSV) ✓' : 'Folha enviada ✓') + ' — cola o texto copiado na legenda'); resetBotoesEnvio(); return; }
   if(resultado === 'cancelado'){ showToast('Envio cancelado'); return; }
 
   const url = URL.createObjectURL(blob);
@@ -663,7 +668,7 @@ async function enviarFolha(){
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 3000);
-  showToast('Ficheiro guardado em Transferências — abre o WhatsApp e anexa-o manualmente');
+  showToast('Ficheiro guardado em Transferências — abre o WhatsApp, anexa-o e cola o texto copiado na legenda');
   resetBotoesEnvio();
 }
 
