@@ -209,7 +209,8 @@
 
 <div class="footer-bar" id="footerBar">
   <button class="btn-save" id="btnSave">Guardar</button>
-  <button class="btn-send" id="btnSend">📤 Enviar folha (Excel)</button>
+  <button class="btn-send" id="btnSend">📤 Enviar resumo</button>
+  <button class="btn-send" id="btnAttach" style="display:none;">📎 Anexar ficheiro</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -395,6 +396,7 @@ document.getElementById('btnTrocarNome').addEventListener('click', () => {
     if(!confirm('Trocar de colaborador limpa os serviços já adicionados a esta folha. Continuar?')) return;
     entries = [];
     renderEntries();
+    resetBotoesEnvio();
   }
   document.getElementById('nome').disabled = false;
   document.getElementById('btnTrocarNome').style.display = 'none';
@@ -523,11 +525,43 @@ document.getElementById('btnSend').addEventListener('click', () => {
   const incompletos = diasIncompletos();
   if(incompletos.length > 0){
     const lista = incompletos.map(i => `• ${i.dt}: faltam ${i.falta.toFixed(1)}h`).join('\n');
-    showConfirmModal(`Atenção — há dias com menos de 8h registadas:\n\n${lista}\n\nContinuar mesmo assim?`, enviarFolha);
+    showConfirmModal(`Atenção — há dias com menos de 8h registadas:\n\n${lista}\n\nContinuar mesmo assim?`, enviarResumo);
     return;
   }
-  enviarFolha();
+  enviarResumo();
 });
+
+function mostrarBotaoAnexar(){
+  document.getElementById('btnSend').style.display = 'none';
+  document.getElementById('btnAttach').style.display = 'block';
+}
+
+function resetBotoesEnvio(){
+  document.getElementById('btnSend').style.display = 'block';
+  document.getElementById('btnAttach').style.display = 'none';
+}
+
+// Passo 1: manda só texto (sem ficheiro) — é a única via de partilha comprovada
+// fiável em qualquer Android; o WhatsApp mostra-a sempre como mensagem normal.
+// Um ficheiro anexado nunca mostra o texto que o acompanha (confirmado por
+// teste real), daí ir à parte, antes do ficheiro.
+async function enviarResumo(){
+  const nome = document.getElementById('nome').value;
+  const semana = document.getElementById('semana').value;
+  const texto = `${nome} — Semana ${semana}`;
+
+  if(navigator.share){
+    try{
+      await navigator.share({ text: texto, title: 'Folha de serviço' });
+    }catch(err){
+      if(err.name === 'AbortError'){ showToast('Envio cancelado'); return; }
+    }
+  }
+  showToast('Resumo enviado — agora anexa o ficheiro com os dados');
+  mostrarBotaoAnexar();
+}
+
+document.getElementById('btnAttach').addEventListener('click', enviarFolha);
 
 async function enviarFolha(){
   const nome = document.getElementById('nome').value;
@@ -616,7 +650,7 @@ async function enviarFolha(){
   const textoPreferido = isAndroid ? textoPartilha + ' (CSV — abre bem no Excel)' : textoPartilha;
 
   let resultado = await tentarPartilhar(ficheiroPreferido, textoPreferido);
-  if(resultado === 'enviado'){ showToast(isAndroid ? 'Folha enviada (CSV) ✓' : 'Folha enviada ✓'); return; }
+  if(resultado === 'enviado'){ showToast(isAndroid ? 'Folha enviada (CSV) ✓' : 'Folha enviada ✓'); resetBotoesEnvio(); return; }
   if(resultado === 'cancelado'){ showToast('Envio cancelado'); return; }
 
   const url = URL.createObjectURL(blob);
@@ -625,6 +659,7 @@ async function enviarFolha(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 3000);
   showToast('Ficheiro guardado em Transferências — abre o WhatsApp e anexa-o manualmente');
+  resetBotoesEnvio();
 }
 
 document.getElementById('btnSave').addEventListener('click', async () => {
