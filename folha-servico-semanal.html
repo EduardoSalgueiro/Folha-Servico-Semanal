@@ -289,11 +289,17 @@ document.getElementById('semanaDate').addEventListener('change', syncSemana);
 syncSemana();
 
 async function tryLoadDraft(){
-  const nomeSel = document.getElementById('nome');
-  if(nomeSel.disabled) return; // já há uma folha em edição, não sobrepor
-  const nome = nomeSel.value;
+  const nome = document.getElementById('nome').value;
   const semana = document.getElementById('semana').value;
   if(!nome || !semana) return;
+
+  // Muda sempre para o estado da semana/colaborador selecionados — sem isto,
+  // trocar de semana com o Nome bloqueado deixava ficar em ecrã os dados da
+  // semana anterior, em vez de mostrar a nova (vazia ou com o seu rascunho).
+  entries = [];
+  renderEntries();
+  lockNome();
+
   const key = `folha:${slugKey(semana)}:${slugKey(nome)}`;
   try{
     const r = await storage.get(key);
@@ -386,10 +392,9 @@ async function autoSaveDraft(){
 
 function lockNome(){
   const sel = document.getElementById('nome');
-  if(entries.length > 0 && !sel.disabled){
-    sel.disabled = true;
-    document.getElementById('btnTrocarNome').style.display = 'inline';
-  }
+  const bloquear = entries.length > 0;
+  sel.disabled = bloquear;
+  document.getElementById('btnTrocarNome').style.display = bloquear ? 'inline' : 'none';
 }
 document.getElementById('btnTrocarNome').addEventListener('click', () => {
   if(entries.length > 0){
