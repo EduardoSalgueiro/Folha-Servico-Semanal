@@ -1,0 +1,4 @@
+# Ficheiros de contexto/registo de sessão — privados, ficam só no OneDrive,
+# nunca são publicados no repositório GitHub (que é público).
+contexto-*.md
+CLAUDE.md
