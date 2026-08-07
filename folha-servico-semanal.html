@@ -602,13 +602,18 @@ async function enviarFolha(){
     }
   }
 
+  // O telemóvel só reconhece UMA tentativa de partilha por toque — chamar
+  // navigator.share() duas vezes seguidas (Excel, depois CSV) faz a segunda
+  // falhar sempre, mesmo com um tipo de ficheiro aceite. Por isso escolhe-se
+  // logo à partida qual tentar: no Android vai direto ao CSV (o Excel falha
+  // sempre lá); nos restantes tenta o Excel primeiro (funciona no iPhone).
   const textoPartilha = `Folha de serviço — ${nome} — Semana ${semana}`;
-  let resultado = await tentarPartilhar(file, textoPartilha);
-  if(resultado === 'enviado'){ showToast('Folha enviada ✓'); return; }
-  if(resultado === 'cancelado'){ showToast('Envio cancelado'); return; }
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const ficheiroPreferido = isAndroid ? csvFile : file;
+  const textoPreferido = isAndroid ? textoPartilha + ' (CSV — abre bem no Excel)' : textoPartilha;
 
-  resultado = await tentarPartilhar(csvFile, textoPartilha + ' (CSV — abre bem no Excel)');
-  if(resultado === 'enviado'){ showToast('Folha enviada (CSV) ✓'); return; }
+  let resultado = await tentarPartilhar(ficheiroPreferido, textoPreferido);
+  if(resultado === 'enviado'){ showToast(isAndroid ? 'Folha enviada (CSV) ✓' : 'Folha enviada ✓'); return; }
   if(resultado === 'cancelado'){ showToast('Envio cancelado'); return; }
 
   const url = URL.createObjectURL(blob);
