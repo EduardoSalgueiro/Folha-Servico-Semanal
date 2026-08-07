@@ -167,8 +167,8 @@
         <input type="date" id="data">
       </div>
       <div class="row2">
-        <div class="field"><label>Das</label><input type="time" id="horaIni"></div>
-        <div class="field"><label>Às</label><input type="time" id="horaFim"></div>
+        <div class="field"><label>Das</label><input type="text" inputmode="numeric" maxlength="5" placeholder="08:00" id="horaIni"></div>
+        <div class="field"><label>Às</label><input type="text" inputmode="numeric" maxlength="5" placeholder="16:00" id="horaFim"></div>
         <div class="field"><label>Extras (h)</label><input type="number" id="extras" min="0" step="0.5" placeholder="0"></div>
       </div>
 
@@ -209,8 +209,7 @@
 
 <div class="footer-bar" id="footerBar">
   <button class="btn-save" id="btnSave">Guardar</button>
-  <button class="btn-send" id="btnSend">📤 Enviar resumo</button>
-  <button class="btn-send" id="btnAttach" style="display:none;">📎 Anexar ficheiro</button>
+  <button class="btn-send" id="btnSend">📤 Enviar ficheiro</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -359,6 +358,7 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   if(!nome){ showToast('Seleciona o colaborador'); return; }
   if(!data){ showToast('Indica a data'); return; }
   if(!horaIni || !horaFim){ showToast('Indica as horas'); return; }
+  if(!horaValida(horaIni) || !horaValida(horaFim)){ showToast('Hora inválida — usa o formato 08:00'); return; }
   if(!servicoSel){ showToast('Seleciona o serviço'); return; }
   if(!local){ showToast('Seleciona o local'); return; }
   if(servicoSel === 'Outros (Agricultura)' && !outroDesc){ showToast('Descreve o serviço "Outros"'); return; }
@@ -401,7 +401,6 @@ document.getElementById('btnTrocarNome').addEventListener('click', () => {
     if(!confirm('Trocar de colaborador limpa os serviços já adicionados a esta folha. Continuar?')) return;
     entries = [];
     renderEntries();
-    resetBotoesEnvio();
   }
   document.getElementById('nome').disabled = false;
   document.getElementById('btnTrocarNome').style.display = 'none';
@@ -412,6 +411,18 @@ function horasEntre(ini,fim){
   let diff = (h2*60+m2 - (h1*60+m1))/60; if(diff<0) diff+=24;
   return diff;
 }
+
+// Campo de hora simples (teclado numérico), sem o seletor tipo relógio —
+// vai inserindo os ":" sozinho à medida que se escrevem os dígitos.
+function horaValida(h){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(h); }
+function ligarCampoHora(input){
+  input.addEventListener('input', () => {
+    const digitos = input.value.replace(/\D/g,'').slice(0,4);
+    input.value = digitos.length > 2 ? `${digitos.slice(0,2)}:${digitos.slice(2)}` : digitos;
+  });
+}
+ligarCampoHora(document.getElementById('horaIni'));
+ligarCampoHora(document.getElementById('horaFim'));
 
 // Fonte única de verdade: divide as entradas de um dia em horas normais/extra,
 // usada na pré-visualização, nos registos guardados e na exportação Excel.
@@ -530,43 +541,11 @@ document.getElementById('btnSend').addEventListener('click', () => {
   const incompletos = diasIncompletos();
   if(incompletos.length > 0){
     const lista = incompletos.map(i => `• ${i.dt}: faltam ${i.falta.toFixed(1)}h`).join('\n');
-    showConfirmModal(`Atenção — há dias com menos de 8h registadas:\n\n${lista}\n\nContinuar mesmo assim?`, enviarResumo);
+    showConfirmModal(`Atenção — há dias com menos de 8h registadas:\n\n${lista}\n\nContinuar mesmo assim?`, enviarFolha);
     return;
   }
-  enviarResumo();
+  enviarFolha();
 });
-
-function mostrarBotaoAnexar(){
-  document.getElementById('btnSend').style.display = 'none';
-  document.getElementById('btnAttach').style.display = 'block';
-}
-
-function resetBotoesEnvio(){
-  document.getElementById('btnSend').style.display = 'block';
-  document.getElementById('btnAttach').style.display = 'none';
-}
-
-// Passo 1: manda só texto (sem ficheiro) — é a única via de partilha comprovada
-// fiável em qualquer Android; o WhatsApp mostra-a sempre como mensagem normal.
-// Um ficheiro anexado nunca mostra o texto que o acompanha (confirmado por
-// teste real), daí ir à parte, antes do ficheiro.
-async function enviarResumo(){
-  const nome = document.getElementById('nome').value;
-  const semana = document.getElementById('semana').value;
-  const texto = `${nome} — Semana ${semana}`;
-
-  if(navigator.share){
-    try{
-      await navigator.share({ text: texto, title: 'Folha de serviço' });
-    }catch(err){
-      if(err.name === 'AbortError'){ showToast('Envio cancelado'); return; }
-    }
-  }
-  showToast('Resumo enviado — agora anexa o ficheiro com os dados');
-  mostrarBotaoAnexar();
-}
-
-document.getElementById('btnAttach').addEventListener('click', enviarFolha);
 
 async function enviarFolha(){
   const nome = document.getElementById('nome').value;
@@ -660,7 +639,7 @@ async function enviarFolha(){
   try{ await navigator.clipboard.writeText(`${nome} — Semana ${semana}`); }catch(err){ /* sem acesso à área de transferência — segue sem copiar */ }
 
   let resultado = await tentarPartilhar(ficheiroPreferido, textoPreferido);
-  if(resultado === 'enviado'){ showToast((isAndroid ? 'Folha enviada (CSV) ✓' : 'Folha enviada ✓') + ' — cola o texto copiado na legenda'); resetBotoesEnvio(); return; }
+  if(resultado === 'enviado'){ showToast((isAndroid ? 'Folha enviada (CSV) ✓' : 'Folha enviada ✓') + ' — cola o texto copiado na legenda'); return; }
   if(resultado === 'cancelado'){ showToast('Envio cancelado'); return; }
 
   const url = URL.createObjectURL(blob);
@@ -669,7 +648,6 @@ async function enviarFolha(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 3000);
   showToast('Ficheiro guardado em Transferências — abre o WhatsApp, anexa-o e cola o texto copiado na legenda');
-  resetBotoesEnvio();
 }
 
 document.getElementById('btnSave').addEventListener('click', async () => {
