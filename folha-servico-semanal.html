@@ -68,6 +68,7 @@
   .entry .serv{font-weight:600; font-size:14px;}
   .entry .meta{font-size:12px; color:var(--text-mute);}
   .entry .del{position:absolute; top:10px; right:10px; background:none; border:none; color:var(--rust); font-size:16px; padding:4px 8px; font-family:inherit;}
+  .entry .edit{position:absolute; top:10px; right:38px; background:none; border:none; color:var(--forest); font-size:15px; padding:4px 8px; font-family:inherit;}
   .entry .obs{font-size:12.5px; color:var(--text-mute); margin-top:5px; font-style:italic;}
 
   .empty-list{text-align:center; padding:30px 10px; color:var(--text-mute); font-size:13px; border:1.5px dashed var(--line); border-radius:10px;}
@@ -227,6 +228,8 @@
 <script>
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
 const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manutenção sistema de rega','Vacas','Outros (Agricultura)','Monte/Casa Moura','Casas'];
+// Serviços que, por si só, obrigam a descrever em Observações (ex.: produto usado)
+const SERVICOS_OBS_OBRIGATORIA = ['Trat. Foliar','Herbicida'];
 const LOCAIS = ['Manantiz','Bico','Ent. Drtª','Ent. Esqdª','24 Horas','Frente Monte','Trás do Monte','Poço','Várzea','Vacas','Charnequinha','Charnequinha Nova Plantação','Outro'];
 
 let tipo = 'com';
@@ -260,15 +263,32 @@ function getISOWeekString(d){
   const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
   return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
 }
-function weekStringToRange(weekStr){
-  if(!weekStr) return null;
+function semanaParaDatas(weekStr){
   const [y,w] = weekStr.split('-W').map(Number);
   const simple = new Date(Date.UTC(y,0,1 + (w-1)*7));
   const dow = simple.getUTCDay() || 7;
   const monday = new Date(simple); monday.setUTCDate(simple.getUTCDate() - dow + 1);
   const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
+  return { monday, sunday };
+}
+function weekStringToRange(weekStr){
+  if(!weekStr) return null;
+  const { monday, sunday } = semanaParaDatas(weekStr);
   const fmt = d => d.toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit',timeZone:'UTC'});
   return `${fmt(monday)} a ${fmt(sunday)} (Segunda a Domingo)`;
+}
+
+// Prazo para lançar serviços de uma semana: dias corridos depois do Domingo
+// (fim da semana) até onde ainda é permitido adicionar/editar. Ajustável
+// pelo Eduardo — 2 = até terça-feira da semana seguinte.
+const DIAS_PRAZO_LANCAMENTO = 2;
+function semanaDentroDoPrazo(weekStr){
+  if(!weekStr) return true;
+  const { sunday } = semanaParaDatas(weekStr);
+  const prazo = new Date(sunday);
+  prazo.setUTCDate(prazo.getUTCDate() + DIAS_PRAZO_LANCAMENTO);
+  prazo.setUTCHours(23,59,59,999);
+  return new Date() <= prazo;
 }
 function renderSemanaRange(){
   const semana = document.getElementById('semana').value;
@@ -313,7 +333,33 @@ async function tryLoadDraft(){
     }
   }catch(err){ /* sem rascunho guardado — segue vazio */ }
 }
-document.getElementById('nome').addEventListener('change', tryLoadDraft);
+
+// Bloqueio de colaborador por aparelho: a primeira escolha feita neste
+// telemóvel fica gravada permanentemente — reabrir o link mais tarde (mesmo
+// noutro dia/semana) já não mostra a opção de escolher outro colaborador.
+const DEVICE_NOME_KEY = 'dispositivo:colaborador';
+let dispositivoBloqueado = false;
+
+document.getElementById('nome').addEventListener('change', async () => {
+  const nome = document.getElementById('nome').value;
+  if(nome && !dispositivoBloqueado){
+    dispositivoBloqueado = true;
+    try{ await storage.set(DEVICE_NOME_KEY, nome); }catch(err){}
+  }
+  tryLoadDraft();
+});
+
+(async function aplicarBloqueioDispositivo(){
+  try{
+    const r = await storage.get(DEVICE_NOME_KEY);
+    if(r && r.value){
+      dispositivoBloqueado = true;
+      document.getElementById('nome').value = r.value;
+      lockNome();
+      tryLoadDraft();
+    }
+  }catch(err){ /* sem colaborador gravado neste aparelho ainda */ }
+})();
 
 function populateServico(){
   const sel = document.getElementById('servico');
@@ -354,8 +400,10 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   const outroDesc = document.getElementById('outroDesc').value.trim();
   const local = document.getElementById('local').value;
   const obs = document.getElementById('obs').value.trim();
+  const semana = document.getElementById('semana').value;
 
   if(!nome){ showToast('Seleciona o colaborador'); return; }
+  if(!semanaDentroDoPrazo(semana)){ showToast('O prazo para lançar serviços desta semana já terminou'); return; }
   if(!data){ showToast('Indica a data'); return; }
   if(!horaIni || !horaFim){ showToast('Indica as horas'); return; }
   if(!horaValida(horaIni) || !horaValida(horaFim)){ showToast('Hora inválida — usa o formato 08:00'); return; }
@@ -363,6 +411,7 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   if(!local){ showToast('Seleciona o local'); return; }
   if(servicoSel === 'Outros (Agricultura)' && !outroDesc){ showToast('Descreve o serviço "Outros"'); return; }
   if(local === 'Outro' && !obs){ showToast('Descreve o local em Observações'); return; }
+  if(SERVICOS_OBS_OBRIGATORIA.includes(servicoSel) && !obs){ showToast(`"${servicoSel}" obriga a descrever em Observações`); return; }
 
   entries.push({
     tipo, data, horaIni, horaFim, extras: extras || '0',
@@ -392,16 +441,19 @@ async function autoSaveDraft(){
 
 function lockNome(){
   const sel = document.getElementById('nome');
-  const bloquear = entries.length > 0;
+  const bloquear = dispositivoBloqueado || entries.length > 0;
   sel.disabled = bloquear;
   document.getElementById('btnTrocarNome').style.display = bloquear ? 'inline' : 'none';
 }
-document.getElementById('btnTrocarNome').addEventListener('click', () => {
-  if(entries.length > 0){
-    if(!confirm('Trocar de colaborador limpa os serviços já adicionados a esta folha. Continuar?')) return;
-    entries = [];
-    renderEntries();
-  }
+document.getElementById('btnTrocarNome').addEventListener('click', async () => {
+  const aviso = dispositivoBloqueado
+    ? 'Este telemóvel está associado a este colaborador. Trocar limpa os serviços já adicionados e liberta o aparelho para escolher outro colaborador. Continuar?'
+    : 'Trocar de colaborador limpa os serviços já adicionados a esta folha. Continuar?';
+  if(!confirm(aviso)) return;
+  entries = [];
+  renderEntries();
+  dispositivoBloqueado = false;
+  try{ await storage.set(DEVICE_NOME_KEY, ''); }catch(err){}
   document.getElementById('nome').disabled = false;
   document.getElementById('btnTrocarNome').style.display = 'none';
 });
@@ -502,10 +554,12 @@ function renderEntries(){
   const wrap = document.getElementById('entriesList');
   if(entries.length === 0){
     wrap.innerHTML = `<div class="empty-list">Ainda sem serviços adicionados esta semana</div>`;
+    renderDailySummary();
     return;
   }
   wrap.innerHTML = entries.map((e,i) => `
     <div class="entry ${e.tipo}">
+      <button class="edit" data-i="${i}">✏</button>
       <button class="del" data-i="${i}">✕</button>
       <div class="top"><span class="serv">${esc(e.servico)}</span><span class="meta mono">${e.data}</span></div>
       <div class="meta">${e.horaIni}–${e.horaFim}${Number(e.extras)>0 ? ` · +${e.extras}h extra` : ''} ${e.local ? ' · '+esc(e.local) : ''}</div>
@@ -515,10 +569,37 @@ function renderEntries(){
   wrap.querySelectorAll('.del').forEach(btn => btn.addEventListener('click', () => {
     entries.splice(Number(btn.dataset.i),1);
     renderEntries();
+    autoSaveDraft();
+  }));
+  wrap.querySelectorAll('.edit').forEach(btn => btn.addEventListener('click', () => {
+    editarEntrada(Number(btn.dataset.i));
   }));
   renderDailySummary();
 }
 renderEntries();
+
+function editarEntrada(i){
+  const e = entries[i];
+  entries.splice(i,1);
+  renderEntries();
+
+  setTipo(e.tipo); // repõe a lista de serviços certa (Com/Sem folha) antes de escolher o valor
+  document.getElementById('data').value = e.data;
+  document.getElementById('horaIni').value = e.horaIni;
+  document.getElementById('horaFim').value = e.horaFim;
+  document.getElementById('extras').value = e.extras;
+  document.getElementById('local').value = e.local;
+  document.getElementById('obs').value = e.obs;
+
+  if(e.servico.startsWith('Outros: ')){
+    document.getElementById('servico').value = 'Outros (Agricultura)';
+    document.getElementById('outroDesc').value = e.servico.slice('Outros: '.length);
+  }else{
+    document.getElementById('servico').value = e.servico;
+  }
+  toggleOutro();
+  showToast('A editar — corrige e toca em "Adicionar à lista"');
+}
 
 function showConfirmModal(message, onConfirm){
   const overlay = document.getElementById('confirmModal');
