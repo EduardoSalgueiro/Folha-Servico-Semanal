@@ -266,6 +266,15 @@ const EQUIPAMENTOS = {
   'Colheita': ['Vibrador Traseiro','Maquina Colheita'],
   'Outros': ['Retro','Outro']
 };
+// A categoria só serve para filtrar a lista no formulário — não é guardada
+// nem exportada, só o equipamento em si. Ao editar, redescobre-se a
+// categoria a partir do equipamento já gravado.
+function categoriaDoEquipamento(item){
+  for(const cat in EQUIPAMENTOS){
+    if(EQUIPAMENTOS[cat].includes(item)) return cat;
+  }
+  return '';
+}
 
 let tipo = 'com';
 let entries = [];
@@ -483,7 +492,7 @@ document.getElementById('btnAdd').addEventListener('click', () => {
     tipo, data, horaIni, horaFim, extras: extras || '0',
     servico: servicoSel,
     local,
-    equipamento: ehEquipamentos ? `${equipCategoria} — ${equipItem}` : '',
+    equipamento: ehEquipamentos ? equipItem : '',
     obs
   });
 
@@ -671,10 +680,9 @@ function editarEntrada(i){
   document.getElementById('local').value = e.local;
 
   if(e.equipamento){
-    const [cat, item] = e.equipamento.split(' — ');
-    document.getElementById('equipCategoria').value = cat;
+    document.getElementById('equipCategoria').value = categoriaDoEquipamento(e.equipamento);
     populateEquipItem();
-    document.getElementById('equipItem').value = item;
+    document.getElementById('equipItem').value = e.equipamento;
   }
   showToast('A editar — corrige e toca em "Adicionar à lista"');
 }
