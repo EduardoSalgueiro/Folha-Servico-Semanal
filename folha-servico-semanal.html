@@ -177,14 +177,19 @@
         <label id="labelServico">Serviço</label>
         <select id="servico"></select>
       </div>
-      <div class="field" id="outroWrap" style="display:none;">
-        <label>Descrição (Outros)</label>
-        <input type="text" id="outroDesc" placeholder="Pequena descrição">
-      </div>
 
       <div class="field">
         <label id="labelLocal">Local</label>
         <select id="local"></select>
+      </div>
+
+      <div class="field" id="equipCategoriaWrap" style="display:none;">
+        <label>Categoria do Equipamento</label>
+        <select id="equipCategoria"></select>
+      </div>
+      <div class="field" id="equipItemWrap" style="display:none;">
+        <label>Equipamento</label>
+        <select id="equipItem"></select>
       </div>
 
       <div class="field">
@@ -227,10 +232,38 @@
 
 <script>
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
-const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manutenção sistema de rega','Vacas','Outros (Agricultura)','Monte/Casa Moura','Casas'];
-// Serviços que, por si só, obrigam a descrever em Observações (ex.: produto usado)
-const SERVICOS_OBS_OBRIGATORIA = ['Trat. Foliar','Herbicida'];
-const LOCAIS = ['Manantiz','Bico','Ent. Drtª','Ent. Esqdª','24 Horas','Frente Monte','Trás do Monte','Poço','Várzea','Vacas','Charnequinha','Charnequinha Nova Plantação','Outro'];
+const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manut. Rega e Control de Adubos','Vacas','Outros (Agricultura)','Contagens de Armadilhas','Monte/Casa Moura','Casas','Outros'];
+// Serviços que, por si só, obrigam a descrever em Observações (independente do local)
+const SERVICOS_OBS_OBRIGATORIA = ['Trat. Foliar','Herbicida','Outros (Agricultura)','Outros'];
+
+// "Com folha" usa sempre a mesma lista de locais, qualquer que seja o serviço.
+const LOCAIS_COM = ['Manantiz','Bico','Ent. Drtª','Ent. Esqdª','24 Horas','Frente Monte','Trás do Monte','Poço','Várzea','Charnequinha','Charnequinha Nova Plantação'];
+
+// "Sem folha" tem uma lista de locais própria por serviço.
+const LOCAIS_SEM_POR_SERVICO = {
+  'Cons. e Rep. Parcelas/Caminhos': ['Sampaio','Charnequinha'],
+  'Cons. e Rep. Equipamentos/Máquinas': ['Sampaio','Charnequinha'],
+  'Rega e Manut. Rega e Control de Adubos': ['Sampaio','Charnequinha'],
+  'Vacas': ['Sampaio','Charnequinha'],
+  'Outros (Agricultura)': ['Sampaio','Charnequinha'],
+  'Contagens de Armadilhas': ['Sampaio','Charnequinha'],
+  'Monte/Casa Moura': ['Moura','Sampaio','Charnequinha','Outro'],
+  'Casas': ['Rua do Forno','Rua Santana e Costa','Av Carmo 49','Av Carmo 51','Terreno Salúquia','Outro'],
+  'Outros': ['Outro']
+};
+
+// Equipamentos/Máquinas: seleção em cascata (categoria → item específico).
+const EQUIPAMENTOS = {
+  'Tratores': ['Valtra','Jonh Deere','Jonh Deere Novo','Landini','New Holland PH','New Holland NT'],
+  'Maq. Tratamento': ['Atomizador','Pulverizador','Barra Herbicida'],
+  'Manuais': ['Pellenks','Roçadoras','Motoserras','Varejadores','Tesouras Poda','Serras Elétricas'],
+  'Motos': ['Moto 4 Azul','Moto 4 Laranja','Moto 4 Vermelha'],
+  'Reboques': ['Cigarrão','Relouttes','Gallera','Atrelado'],
+  'Automóveis': ['L300','Opel','Fuso','Peugeot','Ford'],
+  'Alfaias': ['Destroçador Rama','Destroçador Erva','Espalhador Adubo','Grade Amaricana','Rodo','Cilindro'],
+  'Colheita': ['Vibrador Traseiro','Maquina Colheita'],
+  'Outros': ['Retro','Outro']
+};
 
 let tipo = 'com';
 let entries = [];
@@ -366,16 +399,37 @@ function populateServico(){
   const list = tipo === 'com' ? COM_FOLHA : SEM_FOLHA;
   sel.innerHTML = `<option value="">Seleciona o serviço</option>` + list.map(s => `<option value="${s}">${s}</option>`).join('');
   document.getElementById('labelServico').textContent = tipo==='com' ? 'Serviço (com folha)' : 'Serviço (sem folha)';
-  toggleOutro();
+  populateLocais();
+  toggleEquipamento();
 }
 function populateLocais(){
   const sel = document.getElementById('local');
-  sel.innerHTML = `<option value="">Seleciona o local</option>` + LOCAIS.map(l => `<option value="${l}">${l}</option>`).join('');
+  const servicoAtual = document.getElementById('servico').value;
+  const lista = tipo === 'com' ? LOCAIS_COM : (LOCAIS_SEM_POR_SERVICO[servicoAtual] || []);
+  sel.innerHTML = `<option value="">Seleciona o local</option>` + lista.map(l => `<option value="${l}">${l}</option>`).join('');
 }
-function toggleOutro(){
-  const sel = document.getElementById('servico');
-  document.getElementById('outroWrap').style.display = (sel.value === 'Outros (Agricultura)') ? 'block' : 'none';
+
+function servicoEhEquipamentos(){
+  return tipo === 'sem' && document.getElementById('servico').value === 'Cons. e Rep. Equipamentos/Máquinas';
 }
+function toggleEquipamento(){
+  const mostrar = servicoEhEquipamentos();
+  document.getElementById('equipCategoriaWrap').style.display = mostrar ? 'block' : 'none';
+  document.getElementById('equipItemWrap').style.display = mostrar ? 'block' : 'none';
+  if(mostrar) populateEquipCategoria();
+}
+function populateEquipCategoria(){
+  const sel = document.getElementById('equipCategoria');
+  sel.innerHTML = `<option value="">Seleciona a categoria</option>` + Object.keys(EQUIPAMENTOS).map(c => `<option value="${c}">${c}</option>`).join('');
+  populateEquipItem();
+}
+function populateEquipItem(){
+  const cat = document.getElementById('equipCategoria').value;
+  const sel = document.getElementById('equipItem');
+  const lista = EQUIPAMENTOS[cat] || [];
+  sel.innerHTML = `<option value="">Seleciona o equipamento</option>` + lista.map(i => `<option value="${i}">${i}</option>`).join('');
+}
+document.getElementById('equipCategoria').addEventListener('change', populateEquipItem);
 
 document.getElementById('btnCom').addEventListener('click', () => setTipo('com'));
 document.getElementById('btnSem').addEventListener('click', () => setTipo('sem'));
@@ -385,10 +439,12 @@ function setTipo(t){
   document.getElementById('btnSem').classList.toggle('active', t==='sem');
   populateServico();
 }
-document.getElementById('servico').addEventListener('change', toggleOutro);
+document.getElementById('servico').addEventListener('change', () => {
+  populateLocais();
+  toggleEquipamento();
+});
 
 populateServico();
-populateLocais();
 
 document.getElementById('btnAdd').addEventListener('click', () => {
   const nome = document.getElementById('nome').value;
@@ -397,10 +453,12 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   const horaFim = document.getElementById('horaFim').value;
   const extras = document.getElementById('extras').value;
   const servicoSel = document.getElementById('servico').value;
-  const outroDesc = document.getElementById('outroDesc').value.trim();
   const local = document.getElementById('local').value;
+  const equipCategoria = document.getElementById('equipCategoria').value;
+  const equipItem = document.getElementById('equipItem').value;
   const obs = document.getElementById('obs').value.trim();
   const semana = document.getElementById('semana').value;
+  const ehEquipamentos = servicoEhEquipamentos();
 
   if(!nome){ showToast('Seleciona o colaborador'); return; }
   if(!semanaDentroDoPrazo(semana)){ showToast('O prazo para lançar serviços desta semana já terminou'); return; }
@@ -409,20 +467,28 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   if(!horaValida(horaIni) || !horaValida(horaFim)){ showToast('Hora inválida — usa o formato 08:00'); return; }
   if(!servicoSel){ showToast('Seleciona o serviço'); return; }
   if(!local){ showToast('Seleciona o local'); return; }
-  if(servicoSel === 'Outros (Agricultura)' && !outroDesc){ showToast('Descreve o serviço "Outros"'); return; }
+  if(ehEquipamentos){
+    if(!equipCategoria){ showToast('Seleciona a categoria do equipamento'); return; }
+    if(!equipItem){ showToast('Seleciona o equipamento'); return; }
+    if(equipItem === 'Outro' && !obs){ showToast('Descreve o equipamento em Observações'); return; }
+  }
   if(local === 'Outro' && !obs){ showToast('Descreve o local em Observações'); return; }
   if(SERVICOS_OBS_OBRIGATORIA.includes(servicoSel) && !obs){ showToast(`"${servicoSel}" obriga a descrever em Observações`); return; }
 
   entries.push({
     tipo, data, horaIni, horaFim, extras: extras || '0',
-    servico: servicoSel === 'Outros (Agricultura)' ? `Outros: ${outroDesc}` : servicoSel,
-    local, obs
+    servico: servicoSel,
+    local,
+    equipamento: ehEquipamentos ? `${equipCategoria} — ${equipItem}` : '',
+    obs
   });
 
-  ['data','horaIni','horaFim','extras','obs','outroDesc'].forEach(id => document.getElementById(id).value = '');
+  ['data','horaIni','horaFim','extras','obs'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('servico').value = '';
   document.getElementById('local').value = '';
-  toggleOutro();
+  document.getElementById('equipCategoria').value = '';
+  populateLocais();
+  toggleEquipamento();
   renderEntries();
   lockNome();
   autoSaveDraft();
@@ -562,7 +628,7 @@ function renderEntries(){
       <button class="edit" data-i="${i}">✏</button>
       <button class="del" data-i="${i}">✕</button>
       <div class="top"><span class="serv">${esc(e.servico)}</span><span class="meta mono">${e.data}</span></div>
-      <div class="meta">${e.horaIni}–${e.horaFim}${Number(e.extras)>0 ? ` · +${e.extras}h extra` : ''} ${e.local ? ' · '+esc(e.local) : ''}</div>
+      <div class="meta">${e.horaIni}–${e.horaFim}${Number(e.extras)>0 ? ` · +${e.extras}h extra` : ''} ${e.local ? ' · '+esc(e.local) : ''}${e.equipamento ? ' · '+esc(e.equipamento) : ''}</div>
       ${e.obs ? `<div class="obs">${esc(e.obs)}</div>` : ''}
     </div>
   `).join('');
@@ -588,16 +654,19 @@ function editarEntrada(i){
   document.getElementById('horaIni').value = e.horaIni;
   document.getElementById('horaFim').value = e.horaFim;
   document.getElementById('extras').value = e.extras;
-  document.getElementById('local').value = e.local;
   document.getElementById('obs').value = e.obs;
 
-  if(e.servico.startsWith('Outros: ')){
-    document.getElementById('servico').value = 'Outros (Agricultura)';
-    document.getElementById('outroDesc').value = e.servico.slice('Outros: '.length);
-  }else{
-    document.getElementById('servico').value = e.servico;
+  document.getElementById('servico').value = e.servico;
+  populateLocais();
+  toggleEquipamento();
+  document.getElementById('local').value = e.local;
+
+  if(e.equipamento){
+    const [cat, item] = e.equipamento.split(' — ');
+    document.getElementById('equipCategoria').value = cat;
+    populateEquipItem();
+    document.getElementById('equipItem').value = item;
   }
-  toggleOutro();
   showToast('A editar — corrige e toca em "Adicionar à lista"');
 }
 
@@ -652,6 +721,7 @@ async function enviarFolha(){
       'Tipo': e.tipo === 'com' ? 'Com folha' : 'Sem folha',
       'Serviço': e.servico,
       'Local': e.local,
+      'Equipamento': e.equipamento || '',
       'Das': e.horaIni,
       'Às': e.horaFim,
       'Horas Normais': Math.round(normal*100)/100,
@@ -662,7 +732,7 @@ async function enviarFolha(){
   });
 
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{wch:14},{wch:10},{wch:11},{wch:9},{wch:10},{wch:20},{wch:16},{wch:7},{wch:7},{wch:12},{wch:10},{wch:11},{wch:24}];
+  ws['!cols'] = [{wch:14},{wch:10},{wch:11},{wch:9},{wch:10},{wch:20},{wch:16},{wch:22},{wch:7},{wch:7},{wch:12},{wch:10},{wch:11},{wch:24}];
   const lastCol = XLSX.utils.encode_col(rows.length ? Object.keys(rows[0]).length - 1 : 11);
   ws['!autofilter'] = { ref: `A1:${lastCol}${rows.length + 1}` };
   const wb = XLSX.utils.book_new();
