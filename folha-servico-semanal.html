@@ -61,15 +61,16 @@
 
   .entry{
     background:#fff; border:1px solid var(--line); border-left:3px solid var(--sage); border-radius:8px;
-    padding:12px 14px; margin-bottom:10px; position:relative;
+    padding:12px 14px; margin-bottom:10px;
   }
   .entry.sem{border-left-color:var(--gold);}
   .entry .top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;}
   .entry .serv{font-weight:600; font-size:14px;}
   .entry .meta{font-size:12px; color:var(--text-mute);}
-  .entry .del{position:absolute; top:10px; right:10px; background:none; border:none; color:var(--rust); font-size:16px; padding:4px 8px; font-family:inherit;}
-  .entry .edit{position:absolute; top:10px; right:38px; background:none; border:none; color:var(--forest); font-size:15px; padding:4px 8px; font-family:inherit;}
   .entry .obs{font-size:12.5px; color:var(--text-mute); margin-top:5px; font-style:italic;}
+  .entry .actions{display:flex; justify-content:flex-end; gap:4px; margin-top:6px;}
+  .entry .del{background:none; border:none; color:var(--rust); font-size:16px; padding:4px 8px; font-family:inherit;}
+  .entry .edit{background:none; border:none; color:var(--forest); font-size:15px; padding:4px 8px; font-family:inherit;}
 
   .empty-list{text-align:center; padding:30px 10px; color:var(--text-mute); font-size:13px; border:1.5px dashed var(--line); border-radius:10px;}
 
@@ -138,7 +139,7 @@
 
   <div id="tab-preencher">
     <div class="field">
-      <label>Nome <button type="button" id="btnTrocarNome" style="display:none; float:right; text-transform:none; font-weight:600; color:var(--rust); background:none; border:none; font-size:11px; font-family:inherit; cursor:pointer;">Trocar colaborador</button></label>
+      <label>Nome</label>
       <select id="nome">
         <option value="">Seleciona o teu nome</option>
         <option>Figueira</option>
@@ -465,6 +466,8 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   if(!data){ showToast('Indica a data'); return; }
   if(!horaIni || !horaFim){ showToast('Indica as horas'); return; }
   if(!horaValida(horaIni) || !horaValida(horaFim)){ showToast('Hora inválida — usa o formato 08:00'); return; }
+  const conflito = entradaSobreposta(data, horaIni, horaFim);
+  if(conflito){ showToast(`Sobreposto com "${conflito.servico}" (${conflito.horaIni}–${conflito.horaFim}) nesse dia`); return; }
   if(!servicoSel){ showToast('Seleciona o serviço'); return; }
   if(!local){ showToast('Seleciona o local'); return; }
   if(ehEquipamentos){
@@ -507,27 +510,30 @@ async function autoSaveDraft(){
 
 function lockNome(){
   const sel = document.getElementById('nome');
-  const bloquear = dispositivoBloqueado || entries.length > 0;
-  sel.disabled = bloquear;
-  document.getElementById('btnTrocarNome').style.display = bloquear ? 'inline' : 'none';
+  sel.disabled = dispositivoBloqueado || entries.length > 0;
 }
-document.getElementById('btnTrocarNome').addEventListener('click', async () => {
-  const aviso = dispositivoBloqueado
-    ? 'Este telemóvel está associado a este colaborador. Trocar limpa os serviços já adicionados e liberta o aparelho para escolher outro colaborador. Continuar?'
-    : 'Trocar de colaborador limpa os serviços já adicionados a esta folha. Continuar?';
-  if(!confirm(aviso)) return;
-  entries = [];
-  renderEntries();
-  dispositivoBloqueado = false;
-  try{ await storage.set(DEVICE_NOME_KEY, ''); }catch(err){}
-  document.getElementById('nome').disabled = false;
-  document.getElementById('btnTrocarNome').style.display = 'none';
-});
 
 function horasEntre(ini,fim){
   const [h1,m1]=ini.split(':').map(Number), [h2,m2]=fim.split(':').map(Number);
   let diff = (h2*60+m2 - (h1*60+m1))/60; if(diff<0) diff+=24;
   return diff;
+}
+
+// Um colaborador não pode estar em dois serviços ao mesmo tempo — verifica se
+// [ini,fim) se sobrepõe a algum outro serviço já lançado no mesmo dia.
+function horaParaMinutos(h){
+  const [hh,mm] = h.split(':').map(Number);
+  return hh*60+mm;
+}
+function horariosSobrepoem(iniA,fimA,iniB,fimB){
+  let a1 = horaParaMinutos(iniA), a2 = horaParaMinutos(fimA);
+  let b1 = horaParaMinutos(iniB), b2 = horaParaMinutos(fimB);
+  if(a2 <= a1) a2 += 24*60;
+  if(b2 <= b1) b2 += 24*60;
+  return a1 < b2 && b1 < a2;
+}
+function entradaSobreposta(data, horaIni, horaFim){
+  return entries.find(e => e.data === data && horariosSobrepoem(horaIni, horaFim, e.horaIni, e.horaFim));
 }
 
 // Campo de hora simples (teclado numérico), sem o seletor tipo relógio —
@@ -625,11 +631,13 @@ function renderEntries(){
   }
   wrap.innerHTML = entries.map((e,i) => `
     <div class="entry ${e.tipo}">
-      <button class="edit" data-i="${i}">✏</button>
-      <button class="del" data-i="${i}">✕</button>
       <div class="top"><span class="serv">${esc(e.servico)}</span><span class="meta mono">${e.data}</span></div>
       <div class="meta">${e.horaIni}–${e.horaFim}${Number(e.extras)>0 ? ` · +${e.extras}h extra` : ''} ${e.local ? ' · '+esc(e.local) : ''}${e.equipamento ? ' · '+esc(e.equipamento) : ''}</div>
       ${e.obs ? `<div class="obs">${esc(e.obs)}</div>` : ''}
+      <div class="actions">
+        <button class="edit" data-i="${i}">✏</button>
+        <button class="del" data-i="${i}">✕</button>
+      </div>
     </div>
   `).join('');
   wrap.querySelectorAll('.del').forEach(btn => btn.addEventListener('click', () => {
