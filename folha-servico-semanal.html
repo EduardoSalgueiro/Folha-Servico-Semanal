@@ -233,9 +233,9 @@
 
 <script>
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
-const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manut. Rega e Control de Adubos','Vacas','Outros (Agricultura)','Contagens de Armadilhas','Monte/Casa Moura','Casas','Outros'];
+const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manut. Rega e Control de Adubos','Deslocações','Vacas','Outros (Agricultura)','Contagens de Armadilhas','Monte/Casa Moura','Casas','Outros'];
 // Serviços que, por si só, obrigam a descrever em Observações (independente do local)
-const SERVICOS_OBS_OBRIGATORIA = ['Trat. Foliar','Herbicida','Outros (Agricultura)','Outros'];
+const SERVICOS_OBS_OBRIGATORIA = ['Trat. Foliar','Herbicida','Outros (Agricultura)','Outros','Deslocações'];
 
 // "Com folha" usa sempre a mesma lista de locais, qualquer que seja o serviço.
 const LOCAIS_COM = ['Manantiz','Bico','Ent. Drtª','Ent. Esqdª','24 Horas','Frente Monte','Trás do Monte','Poço','Várzea','Charnequinha','Charnequinha Nova Plantação'];
@@ -245,6 +245,7 @@ const LOCAIS_SEM_POR_SERVICO = {
   'Cons. e Rep. Parcelas/Caminhos': ['Sampaio','Charnequinha'],
   'Cons. e Rep. Equipamentos/Máquinas': ['Sampaio','Charnequinha'],
   'Rega e Manut. Rega e Control de Adubos': ['Sampaio','Charnequinha'],
+  'Deslocações': ['Moura','Sampaio','Charnequinha','Outro'],
   'Vacas': ['Sampaio','Charnequinha'],
   'Outros (Agricultura)': ['Sampaio','Charnequinha'],
   'Contagens de Armadilhas': ['Sampaio','Charnequinha'],
