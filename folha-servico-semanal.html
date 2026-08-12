@@ -118,6 +118,20 @@
   .modal-box button{flex:1; padding:12px; border-radius:9px; border:none; font-size:13.5px; font-weight:600; font-family:inherit;}
   .modal-box .btn-cancel{background:#fff; border:1.5px solid var(--line); color:var(--text-mute);}
   .modal-box .btn-confirm{background:var(--rust); color:#fff;}
+
+  .equip-picker-btn{
+    width:100%; padding:11px 12px; border:1.5px solid var(--line); border-radius:8px;
+    font-size:15px; font-family:inherit; background:#fff; color:var(--text); text-align:left;
+    user-select:none; -webkit-user-select:none;
+  }
+  #equipModal .modal-box{max-height:80vh; display:flex; flex-direction:column;}
+  #equipModalTitle{margin:0 0 12px; font-size:15px; font-weight:600; color:var(--forest);}
+  #equipModalList{display:flex; flex-direction:column; gap:8px; overflow-y:auto; margin-bottom:14px;}
+  #equipModalList button{
+    padding:12px; border-radius:8px; border:1.5px solid var(--line); background:#fff;
+    text-align:left; font-family:inherit; font-size:14px; color:var(--text); flex:none;
+    user-select:none; -webkit-user-select:none;
+  }
 </style>
 </head>
 <body>
@@ -184,13 +198,10 @@
         <select id="local"></select>
       </div>
 
-      <div class="field" id="equipCategoriaWrap" style="display:none;">
-        <label>Categoria do Equipamento</label>
-        <select id="equipCategoria"></select>
-      </div>
-      <div class="field" id="equipItemWrap" style="display:none;">
+      <div class="field" id="equipWrap" style="display:none;">
         <label>Equipamento</label>
-        <select id="equipItem"></select>
+        <button type="button" class="equip-picker-btn" id="equipPickerBtn">Toca para escolher o equipamento</button>
+        <input type="hidden" id="equipItem">
       </div>
 
       <div class="field">
@@ -231,6 +242,16 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="equipModal">
+  <div class="modal-box">
+    <p id="equipModalTitle"></p>
+    <div id="equipModalList"></div>
+    <div class="actions">
+      <button class="btn-cancel" id="equipModalCancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
 const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manut. Rega e Control de Adubos','Deslocações','Vacas','Outros (Agricultura)','Contagens de Armadilhas','Monte/Casa Moura','Casas','Outros'];
@@ -266,15 +287,6 @@ const EQUIPAMENTOS = {
   'Colheita': ['Vibrador Traseiro','Maquina Colheita'],
   'Outros': ['Retro','Outro']
 };
-// A categoria só serve para filtrar a lista no formulário — não é guardada
-// nem exportada, só o equipamento em si. Ao editar, redescobre-se a
-// categoria a partir do equipamento já gravado.
-function categoriaDoEquipamento(item){
-  for(const cat in EQUIPAMENTOS){
-    if(EQUIPAMENTOS[cat].includes(item)) return cat;
-  }
-  return '';
-}
 
 let tipo = 'com';
 let entries = [];
@@ -425,22 +437,42 @@ function servicoEhEquipamentos(){
 }
 function toggleEquipamento(){
   const mostrar = servicoEhEquipamentos();
-  document.getElementById('equipCategoriaWrap').style.display = mostrar ? 'block' : 'none';
-  document.getElementById('equipItemWrap').style.display = mostrar ? 'block' : 'none';
-  if(mostrar) populateEquipCategoria();
+  document.getElementById('equipWrap').style.display = mostrar ? 'block' : 'none';
+  if(!mostrar) limparEquipamentoSelecionado();
 }
-function populateEquipCategoria(){
-  const sel = document.getElementById('equipCategoria');
-  sel.innerHTML = `<option value="">Seleciona a categoria</option>` + Object.keys(EQUIPAMENTOS).map(c => `<option value="${c}">${c}</option>`).join('');
-  populateEquipItem();
+function limparEquipamentoSelecionado(){
+  document.getElementById('equipItem').value = '';
+  document.getElementById('equipPickerBtn').textContent = 'Toca para escolher o equipamento';
 }
-function populateEquipItem(){
-  const cat = document.getElementById('equipCategoria').value;
-  const sel = document.getElementById('equipItem');
-  const lista = EQUIPAMENTOS[cat] || [];
-  sel.innerHTML = `<option value="">Seleciona o equipamento</option>` + lista.map(i => `<option value="${i}">${i}</option>`).join('');
+
+// Seletor de equipamento em dois passos, dentro de uma única janela: toca no
+// campo → escolhe a categoria (só para filtrar, nunca é guardada) → escolhe
+// o equipamento dessa categoria.
+function abrirEquipModal(){
+  mostrarCategoriasEquip();
+  document.getElementById('equipModal').style.display = 'flex';
 }
-document.getElementById('equipCategoria').addEventListener('change', populateEquipItem);
+function mostrarCategoriasEquip(){
+  document.getElementById('equipModalTitle').textContent = 'Escolhe a categoria';
+  const lista = document.getElementById('equipModalList');
+  lista.innerHTML = Object.keys(EQUIPAMENTOS).map(cat => `<button type="button" data-cat="${esc(cat)}">${esc(cat)}</button>`).join('');
+  lista.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => mostrarItensEquip(btn.dataset.cat)));
+}
+function mostrarItensEquip(categoria){
+  document.getElementById('equipModalTitle').textContent = categoria;
+  const lista = document.getElementById('equipModalList');
+  lista.innerHTML = (EQUIPAMENTOS[categoria] || []).map(item => `<button type="button" data-item="${esc(item)}">${esc(item)}</button>`).join('');
+  lista.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    document.getElementById('equipItem').value = btn.dataset.item;
+    document.getElementById('equipPickerBtn').textContent = btn.dataset.item;
+    fecharEquipModal();
+  }));
+}
+function fecharEquipModal(){
+  document.getElementById('equipModal').style.display = 'none';
+}
+document.getElementById('equipPickerBtn').addEventListener('click', abrirEquipModal);
+document.getElementById('equipModalCancel').addEventListener('click', fecharEquipModal);
 
 document.getElementById('btnCom').addEventListener('click', () => setTipo('com'));
 document.getElementById('btnSem').addEventListener('click', () => setTipo('sem'));
@@ -465,7 +497,6 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   const extras = document.getElementById('extras').value;
   const servicoSel = document.getElementById('servico').value;
   const local = document.getElementById('local').value;
-  const equipCategoria = document.getElementById('equipCategoria').value;
   const equipItem = document.getElementById('equipItem').value;
   const obs = document.getElementById('obs').value.trim();
   const semana = document.getElementById('semana').value;
@@ -481,7 +512,6 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   if(!servicoSel){ showToast('Seleciona o serviço'); return; }
   if(!local){ showToast('Seleciona o local'); return; }
   if(ehEquipamentos){
-    if(!equipCategoria){ showToast('Seleciona a categoria do equipamento'); return; }
     if(!equipItem){ showToast('Seleciona o equipamento'); return; }
     if(equipItem === 'Outro' && !obs){ showToast('Descreve o equipamento em Observações'); return; }
   }
@@ -499,7 +529,7 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   ['data','horaIni','horaFim','extras','obs'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('servico').value = '';
   document.getElementById('local').value = '';
-  document.getElementById('equipCategoria').value = '';
+  limparEquipamentoSelecionado();
   populateLocais();
   toggleEquipamento();
   renderEntries();
@@ -680,9 +710,8 @@ function editarEntrada(i){
   document.getElementById('local').value = e.local;
 
   if(e.equipamento){
-    document.getElementById('equipCategoria').value = categoriaDoEquipamento(e.equipamento);
-    populateEquipItem();
     document.getElementById('equipItem').value = e.equipamento;
+    document.getElementById('equipPickerBtn').textContent = e.equipamento;
   }
   showToast('A editar — corrige e toca em "Adicionar à lista"');
 }
