@@ -119,15 +119,16 @@
   .modal-box .btn-cancel{background:#fff; border:1.5px solid var(--line); color:var(--text-mute);}
   .modal-box .btn-confirm{background:var(--rust); color:#fff;}
 
-  .equip-picker-btn{
+  .picker-btn{
     width:100%; padding:11px 12px; border:1.5px solid var(--line); border-radius:8px;
     font-size:15px; font-family:inherit; background:#fff; color:var(--text); text-align:left;
     user-select:none; -webkit-user-select:none;
   }
-  #equipModal .modal-box{max-height:80vh; display:flex; flex-direction:column;}
-  #equipModalTitle{margin:0 0 12px; font-size:15px; font-weight:600; color:var(--forest);}
-  #equipModalList{display:flex; flex-direction:column; gap:8px; overflow-y:auto; margin-bottom:14px;}
-  #equipModalList button{
+  .picker-btn:disabled{background:var(--bg); color:var(--text-mute); opacity:.75;}
+  #pickerModal .modal-box{max-height:80vh; display:flex; flex-direction:column;}
+  #pickerModalTitle{margin:0 0 12px; font-size:15px; font-weight:600; color:var(--forest);}
+  #pickerModalList{display:flex; flex-direction:column; gap:8px; overflow-y:auto; margin-bottom:14px;}
+  #pickerModalList button{
     padding:12px; border-radius:8px; border:1.5px solid var(--line); background:#fff;
     text-align:left; font-family:inherit; font-size:14px; color:var(--text); flex:none;
     user-select:none; -webkit-user-select:none;
@@ -154,14 +155,8 @@
   <div id="tab-preencher">
     <div class="field">
       <label>Nome</label>
-      <select id="nome">
-        <option value="">Seleciona o teu nome</option>
-        <option>Figueira</option>
-        <option>Serrado</option>
-        <option>Pedro Figueira</option>
-        <option>Rui Ribeiro</option>
-        <option>Cornel</option>
-      </select>
+      <button type="button" class="picker-btn" id="nomePickerBtn">Seleciona o teu nome</button>
+      <input type="hidden" id="nome">
     </div>
     <div class="field">
       <label>Semana (escolhe um dia dessa semana)</label>
@@ -190,17 +185,19 @@
 
       <div class="field">
         <label id="labelServico">Serviço</label>
-        <select id="servico"></select>
+        <button type="button" class="picker-btn" id="servicoPickerBtn">Seleciona o serviço</button>
+        <input type="hidden" id="servico">
       </div>
 
       <div class="field">
         <label id="labelLocal">Local</label>
-        <select id="local"></select>
+        <button type="button" class="picker-btn" id="localPickerBtn">Seleciona o local</button>
+        <input type="hidden" id="local">
       </div>
 
       <div class="field" id="equipWrap" style="display:none;">
         <label>Equipamento</label>
-        <button type="button" class="equip-picker-btn" id="equipPickerBtn">Toca para escolher o equipamento</button>
+        <button type="button" class="picker-btn" id="equipPickerBtn">Toca para escolher o equipamento</button>
         <input type="hidden" id="equipItem">
       </div>
 
@@ -242,17 +239,18 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="equipModal">
+<div class="modal-overlay" id="pickerModal">
   <div class="modal-box">
-    <p id="equipModalTitle"></p>
-    <div id="equipModalList"></div>
+    <p id="pickerModalTitle"></p>
+    <div id="pickerModalList"></div>
     <div class="actions">
-      <button class="btn-cancel" id="equipModalCancel">Cancelar</button>
+      <button class="btn-cancel" id="pickerModalCancel">Cancelar</button>
     </div>
   </div>
 </div>
 
 <script>
+const NOMES = ['Figueira','Serrado','Pedro Figueira','Rui Ribeiro','Cornel'];
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
 const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manut. Rega e Control de Adubos','Deslocações','Vacas','Outros (Agricultura)','Contagens de Armadilhas','Monte/Casa Moura','Casas','Outros'];
 // Serviços que, por si só, obrigam a descrever em Observações (independente do local)
@@ -287,6 +285,24 @@ const EQUIPAMENTOS = {
   'Colheita': ['Vibrador Traseiro','Maquina Colheita'],
   'Outros': ['Retro','Outro']
 };
+
+// Janela de escolha genérica, usada por todos os campos de seleção da app
+// (Nome, Serviço, Local, Equipamento) — evita o seletor nativo do telemóvel
+// e dá-nos controlo total sobre o aspeto e os botões.
+function abrirPicker(titulo, opcoes, aoEscolher){
+  document.getElementById('pickerModalTitle').textContent = titulo;
+  const lista = document.getElementById('pickerModalList');
+  lista.innerHTML = opcoes.map(o => `<button type="button" data-v="${esc(o)}">${esc(o)}</button>`).join('');
+  lista.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    fecharPicker();
+    aoEscolher(btn.dataset.v);
+  }));
+  document.getElementById('pickerModal').style.display = 'flex';
+}
+function fecharPicker(){
+  document.getElementById('pickerModal').style.display = 'none';
+}
+document.getElementById('pickerModalCancel').addEventListener('click', fecharPicker);
 
 let tipo = 'com';
 let entries = [];
@@ -396,13 +412,18 @@ async function tryLoadDraft(){
 const DEVICE_NOME_KEY = 'dispositivo:colaborador';
 let dispositivoBloqueado = false;
 
-document.getElementById('nome').addEventListener('change', async () => {
-  const nome = document.getElementById('nome').value;
-  if(nome && !dispositivoBloqueado){
+async function aoMudarNome(valor){
+  document.getElementById('nome').value = valor;
+  document.getElementById('nomePickerBtn').textContent = valor;
+  if(valor && !dispositivoBloqueado){
     dispositivoBloqueado = true;
-    try{ await storage.set(DEVICE_NOME_KEY, nome); }catch(err){}
+    try{ await storage.set(DEVICE_NOME_KEY, valor); }catch(err){}
   }
   tryLoadDraft();
+}
+document.getElementById('nomePickerBtn').addEventListener('click', () => {
+  if(document.getElementById('nomePickerBtn').disabled) return;
+  abrirPicker('Seleciona o teu nome', NOMES, aoMudarNome);
 });
 
 (async function aplicarBloqueioDispositivo(){
@@ -411,6 +432,7 @@ document.getElementById('nome').addEventListener('change', async () => {
     if(r && r.value){
       dispositivoBloqueado = true;
       document.getElementById('nome').value = r.value;
+      document.getElementById('nomePickerBtn').textContent = r.value;
       lockNome();
       tryLoadDraft();
     }
@@ -418,19 +440,36 @@ document.getElementById('nome').addEventListener('change', async () => {
 })();
 
 function populateServico(){
-  const sel = document.getElementById('servico');
-  const list = tipo === 'com' ? COM_FOLHA : SEM_FOLHA;
-  sel.innerHTML = `<option value="">Seleciona o serviço</option>` + list.map(s => `<option value="${s}">${s}</option>`).join('');
+  document.getElementById('servico').value = '';
+  document.getElementById('servicoPickerBtn').textContent = 'Seleciona o serviço';
   document.getElementById('labelServico').textContent = tipo==='com' ? 'Serviço (com folha)' : 'Serviço (sem folha)';
   populateLocais();
   toggleEquipamento();
 }
+document.getElementById('servicoPickerBtn').addEventListener('click', () => {
+  const lista = tipo === 'com' ? COM_FOLHA : SEM_FOLHA;
+  abrirPicker('Seleciona o serviço', lista, aoMudarServico);
+});
+function aoMudarServico(valor){
+  document.getElementById('servico').value = valor;
+  document.getElementById('servicoPickerBtn').textContent = valor;
+  populateLocais();
+  toggleEquipamento();
+}
+
 function populateLocais(){
-  const sel = document.getElementById('local');
+  document.getElementById('local').value = '';
+  document.getElementById('localPickerBtn').textContent = 'Seleciona o local';
+}
+document.getElementById('localPickerBtn').addEventListener('click', () => {
   const servicoAtual = document.getElementById('servico').value;
   const lista = tipo === 'com' ? LOCAIS_COM : (LOCAIS_SEM_POR_SERVICO[servicoAtual] || []);
-  sel.innerHTML = `<option value="">Seleciona o local</option>` + lista.map(l => `<option value="${l}">${l}</option>`).join('');
-}
+  if(lista.length === 0){ showToast('Escolhe primeiro o serviço'); return; }
+  abrirPicker('Seleciona o local', lista, (valor) => {
+    document.getElementById('local').value = valor;
+    document.getElementById('localPickerBtn').textContent = valor;
+  });
+});
 
 function servicoEhEquipamentos(){
   return tipo === 'sem' && document.getElementById('servico').value === 'Cons. e Rep. Equipamentos/Máquinas';
@@ -444,35 +483,17 @@ function limparEquipamentoSelecionado(){
   document.getElementById('equipItem').value = '';
   document.getElementById('equipPickerBtn').textContent = 'Toca para escolher o equipamento';
 }
-
-// Seletor de equipamento em dois passos, dentro de uma única janela: toca no
-// campo → escolhe a categoria (só para filtrar, nunca é guardada) → escolhe
-// o equipamento dessa categoria.
-function abrirEquipModal(){
-  mostrarCategoriasEquip();
-  document.getElementById('equipModal').style.display = 'flex';
-}
-function mostrarCategoriasEquip(){
-  document.getElementById('equipModalTitle').textContent = 'Escolhe a categoria';
-  const lista = document.getElementById('equipModalList');
-  lista.innerHTML = Object.keys(EQUIPAMENTOS).map(cat => `<button type="button" data-cat="${esc(cat)}">${esc(cat)}</button>`).join('');
-  lista.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => mostrarItensEquip(btn.dataset.cat)));
-}
-function mostrarItensEquip(categoria){
-  document.getElementById('equipModalTitle').textContent = categoria;
-  const lista = document.getElementById('equipModalList');
-  lista.innerHTML = (EQUIPAMENTOS[categoria] || []).map(item => `<button type="button" data-item="${esc(item)}">${esc(item)}</button>`).join('');
-  lista.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
-    document.getElementById('equipItem').value = btn.dataset.item;
-    document.getElementById('equipPickerBtn').textContent = btn.dataset.item;
-    fecharEquipModal();
-  }));
-}
-function fecharEquipModal(){
-  document.getElementById('equipModal').style.display = 'none';
-}
-document.getElementById('equipPickerBtn').addEventListener('click', abrirEquipModal);
-document.getElementById('equipModalCancel').addEventListener('click', fecharEquipModal);
+// Seletor de equipamento em dois passos, dentro da mesma janela genérica:
+// toca no campo → escolhe a categoria (só para filtrar, nunca é guardada) →
+// escolhe o equipamento dessa categoria.
+document.getElementById('equipPickerBtn').addEventListener('click', () => {
+  abrirPicker('Escolhe a categoria', Object.keys(EQUIPAMENTOS), (categoria) => {
+    abrirPicker(categoria, EQUIPAMENTOS[categoria], (item) => {
+      document.getElementById('equipItem').value = item;
+      document.getElementById('equipPickerBtn').textContent = item;
+    });
+  });
+});
 
 document.getElementById('btnCom').addEventListener('click', () => setTipo('com'));
 document.getElementById('btnSem').addEventListener('click', () => setTipo('sem'));
@@ -482,10 +503,6 @@ function setTipo(t){
   document.getElementById('btnSem').classList.toggle('active', t==='sem');
   populateServico();
 }
-document.getElementById('servico').addEventListener('change', () => {
-  populateLocais();
-  toggleEquipamento();
-});
 
 populateServico();
 
@@ -527,11 +544,7 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   });
 
   ['data','horaIni','horaFim','extras','obs'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('servico').value = '';
-  document.getElementById('local').value = '';
-  limparEquipamentoSelecionado();
-  populateLocais();
-  toggleEquipamento();
+  populateServico();
   renderEntries();
   lockNome();
   autoSaveDraft();
@@ -549,8 +562,7 @@ async function autoSaveDraft(){
 }
 
 function lockNome(){
-  const sel = document.getElementById('nome');
-  sel.disabled = dispositivoBloqueado || entries.length > 0;
+  document.getElementById('nomePickerBtn').disabled = dispositivoBloqueado || entries.length > 0;
 }
 
 function horasEntre(ini,fim){
@@ -705,9 +717,10 @@ function editarEntrada(i){
   document.getElementById('obs').value = e.obs;
 
   document.getElementById('servico').value = e.servico;
-  populateLocais();
+  document.getElementById('servicoPickerBtn').textContent = e.servico;
   toggleEquipamento();
   document.getElementById('local').value = e.local;
+  document.getElementById('localPickerBtn').textContent = e.local;
 
   if(e.equipamento){
     document.getElementById('equipItem').value = e.equipamento;
