@@ -42,6 +42,14 @@
   .row2{display:flex; gap:10px;}
   .row2 > .field{flex:1;}
 
+  .date-overlay-wrap{position:relative;}
+  .date-overlay{
+    position:absolute; inset:0; z-index:1; pointer-events:none;
+    display:flex; align-items:center;
+    padding:11px 12px; border:1.5px solid transparent; border-radius:8px;
+    font-size:15px; font-family:inherit; background:#fff; color:var(--text);
+  }
+
   .toggle{display:flex; gap:8px; margin-bottom:14px;}
   .toggle button{
     flex:1; padding:11px; border-radius:8px; border:1.5px solid var(--line); background:#fff;
@@ -160,9 +168,11 @@
     </div>
     <div class="field">
       <label>Semana (escolhe um dia dessa semana)</label>
-      <input type="date" id="semanaDate">
+      <div class="date-overlay-wrap">
+        <input type="date" id="semanaDate">
+        <div class="date-overlay" id="semanaDateOverlay"></div>
+      </div>
       <input type="hidden" id="semana">
-      <div id="semanaRange" style="font-size:12px; color:var(--text-mute); margin-top:5px;"></div>
     </div>
 
     <div class="card">
@@ -364,7 +374,7 @@ function semanaDentroDoPrazo(weekStr){
 }
 function renderSemanaRange(){
   const semana = document.getElementById('semana').value;
-  document.getElementById('semanaRange').textContent = weekStringToRange(semana) || '';
+  document.getElementById('semanaDateOverlay').textContent = weekStringToRange(semana) || '';
 }
 function slugKey(str){
   return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase();
