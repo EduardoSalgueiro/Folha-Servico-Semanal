@@ -260,7 +260,9 @@
 </div>
 
 <script>
-const NOMES = ['Figueira','Serrado','Pedro Figueira','Rui Ribeiro','Cornel'];
+const NOMES = ['Figueira','Serrado','Pedro Figueira','Rui Ribeiro','Cornel','Vânia','Natália'];
+// Colaboradores que só podem lançar serviços "Sem folha" (a opção "Com folha" fica escondida).
+const NOMES_SO_SEM_FOLHA = ['Vânia','Natália'];
 const COM_FOLHA = ['Poda','Topping','Baixeiras','Trat. Foliar','Erva','Rama','Herbicida','Adubo/Mat. Org.','Raticida','Burricos','Colheita','Colheita Carrego'];
 const SEM_FOLHA = ['Cons. e Rep. Parcelas/Caminhos','Cons. e Rep. Equipamentos/Máquinas','Rega e Manut. Rega e Control de Adubos','Deslocações','Vacas','Outros (Agricultura)','Contagens de Armadilhas','Monte/Casa Moura','Casas','Outros'];
 // Serviços que, por si só, obrigam a descrever em Observações (independente do local)
@@ -422,9 +424,17 @@ async function tryLoadDraft(){
 const DEVICE_NOME_KEY = 'dispositivo:colaborador';
 let dispositivoBloqueado = false;
 
+// Alguns colaboradores só têm acesso a "Sem folha" — esconde a opção "Com folha".
+function aplicarRestricaoTipoPorNome(nome){
+  const restrito = NOMES_SO_SEM_FOLHA.includes(nome);
+  document.getElementById('btnCom').style.display = restrito ? 'none' : 'block';
+  if(restrito && tipo === 'com'){ setTipo('sem'); }
+}
+
 async function aoMudarNome(valor){
   document.getElementById('nome').value = valor;
   document.getElementById('nomePickerBtn').textContent = valor;
+  aplicarRestricaoTipoPorNome(valor);
   if(valor && !dispositivoBloqueado){
     dispositivoBloqueado = true;
     try{ await storage.set(DEVICE_NOME_KEY, valor); }catch(err){}
@@ -443,6 +453,7 @@ document.getElementById('nomePickerBtn').addEventListener('click', () => {
       dispositivoBloqueado = true;
       document.getElementById('nome').value = r.value;
       document.getElementById('nomePickerBtn').textContent = r.value;
+      aplicarRestricaoTipoPorNome(r.value);
       lockNome();
       tryLoadDraft();
     }
