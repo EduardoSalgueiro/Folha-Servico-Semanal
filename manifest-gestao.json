@@ -1,0 +1,17 @@
+{
+  "name": "Monte de Sampaio — Gestão",
+  "short_name": "Gestão TS",
+  "start_url": "./folha-servico-gestao.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FAF9F5",
+  "theme_color": "#3F6029",
+  "icons": [
+    {
+      "src": "./icon.jpg",
+      "sizes": "300x357",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

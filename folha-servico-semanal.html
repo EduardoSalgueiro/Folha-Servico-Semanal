@@ -298,6 +298,26 @@ const EQUIPAMENTOS = {
   'Outros': ['Retro','Outro']
 };
 
+// Folha de cálculo central (Google Sheets/Apps Script) onde ficam também
+// gravados os lançamentos, para a equipa de gestão poder consultar por
+// colaborador+semana. Token combinado com o Apps Script — não é segurança
+// forte (o código desta app é público), só um travão simples contra lixo
+// acidental.
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbze6Bde5WYBzjXNnezXpxP_7xFWuj0XFIKlRYPscKtHWrpqFKeqmOCoQFBrDtGTJJwn/exec';
+const APPS_SCRIPT_TOKEN = 'monte-sampaio-2026';
+
+// Envia os lançamentos para a folha central, em segundo plano — não bloqueia
+// nem atrasa a partilha do ficheiro (que tem de continuar a ser a primeira
+// coisa a acontecer depois do toque, para o telemóvel não recusar o gesto).
+// Falhas (sem rede, etc.) não interrompem o fluxo normal do colaborador.
+function sincronizarComFolhaCentral(nome, semana, rows){
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ token: APPS_SCRIPT_TOKEN, nome, semana, rows })
+  }).catch(err => console.error('Sincronização com a folha central falhou:', err));
+}
+
 // Janela de escolha genérica, usada por todos os campos de seleção da app
 // (Nome, Serviço, Local, Equipamento) — evita o seletor nativo do telemóvel
 // e dá-nos controlo total sobre o aspeto e os botões.
@@ -657,6 +677,12 @@ function getDailyTotals(){
 }
 
 const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+// Datas guardam-se sempre em AAAA-MM-DD internamente (ordenação, <input type="date">,
+// deteção de sobreposição) — isto é só para o que aparece no ecrã.
+function formatarDataPT(iso){
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
 function renderDailySummary(){
   const wrap = document.getElementById('dailySummary');
   const map = getDailyTotals();
@@ -672,7 +698,7 @@ function renderDailySummary(){
     const dname = DIAS_SEMANA[new Date(dt+'T00:00:00').getDay()];
     return `<div class="day-card ${isOk?'ok':'warn'}">
       <div class="top">
-        <span class="dname">${dname} · <span class="mono">${dt}</span></span>
+        <span class="dname">${dname} · <span class="mono">${formatarDataPT(dt)}</span></span>
         <span class="badge ${isOk?'ok':'warn'}">${isOk ? '✓ 8h completas' : `⚠ faltam ${falta.toFixed(1)}h`}</span>
       </div>
       <div style="font-size:12px; color:var(--text-mute); margin-bottom:4px;">${info.normal.toFixed(1)}h normais${info.extras>0?` + ${info.extras.toFixed(1)}h extra`:''}</div>
@@ -704,7 +730,7 @@ function renderEntries(){
   }
   wrap.innerHTML = entries.map((e,i) => `
     <div class="entry ${e.tipo}">
-      <div class="top"><span class="serv">${esc(e.servico)}</span><span class="meta mono">${e.data}</span></div>
+      <div class="top"><span class="serv">${esc(e.servico)}</span><span class="meta mono">${formatarDataPT(e.data)}</span></div>
       <div class="meta">${e.horaIni}–${e.horaFim}${Number(e.extras)>0 ? ` · +${e.extras}h extra` : ''} ${e.local ? ' · '+esc(e.local) : ''}${e.equipamento ? ' · '+esc(e.equipamento) : ''}</div>
       ${e.obs ? `<div class="obs">${esc(e.obs)}</div>` : ''}
       <div class="actions">
@@ -796,7 +822,7 @@ async function enviarFolha(){
     return {
       'Nome': nome,
       'Semana': semana,
-      'Data': e.data,
+      'Data': formatarDataPT(e.data),
       'Dia': DIAS[d.getDay()],
       'Tipo': e.tipo === 'com' ? 'Com folha' : 'Sem folha',
       'Serviço': e.servico,
@@ -810,6 +836,8 @@ async function enviarFolha(){
       'Obs.': e.obs
     };
   });
+
+  sincronizarComFolhaCentral(nome, semana, rows);
 
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [{wch:14},{wch:10},{wch:11},{wch:9},{wch:10},{wch:20},{wch:16},{wch:22},{wch:7},{wch:7},{wch:12},{wch:10},{wch:11},{wch:24}];

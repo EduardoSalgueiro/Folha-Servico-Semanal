@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Monte de Sampaio — Gestão</title>
+<link rel="manifest" href="manifest-gestao.json">
+<meta name="theme-color" content="#3F6029">
+<link rel="icon" type="image/jpeg" href="icon.jpg">
+<link rel="apple-touch-icon" href="icon.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forest:#3F6029; --forest-light:#537B37; --sage:#8FBA4E;
+    --gold:#D58D27; --rust:#A6432B; --bg:#FAF9F5; --card:#FFFFFF;
+    --line:#E4E1D6; --text:#1E241D; --text-mute:#6B7264;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',sans-serif; -webkit-font-smoothing:antialiased; padding-bottom:30px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  header{background:var(--forest); color:#F3F1E8; padding:16px 18px 18px; display:flex; align-items:center; gap:12px;}
+  header img{width:38px; height:38px; object-fit:contain; background:#fff; border-radius:8px; padding:3px; flex-shrink:0;}
+  header h1{font-size:16px; margin:0 0 2px; font-weight:600;}
+  header p{margin:0; font-size:11.5px; color:#C7CCB8;}
+
+  main{padding:16px; max-width:520px; margin:0 auto;}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); margin-bottom:5px;}
+  .field input, .field select{
+    width:100%; padding:11px 12px; border:1.5px solid var(--line); border-radius:8px;
+    font-size:15px; font-family:inherit; background:#fff; color:var(--text);
+  }
+  .field input:focus, .field select:focus{outline:none; border-color:var(--sage);}
+
+  .date-overlay-wrap{position:relative;}
+  .date-overlay{
+    position:absolute; inset:0; z-index:1; pointer-events:none;
+    display:flex; align-items:center;
+    padding:11px 12px; border:1.5px solid transparent; border-radius:8px;
+    font-size:15px; font-family:inherit; background:#fff; color:var(--text);
+  }
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px;}
+  .card h3{margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--forest);}
+
+  .btn-add{
+    width:100%; padding:13px; border-radius:9px; border:none; background:var(--forest); color:#fff;
+    font-size:14.5px; font-weight:600; font-family:inherit;
+  }
+  .btn-add:active{background:var(--forest-light);}
+
+  .entry{
+    background:#fff; border:1px solid var(--line); border-left:3px solid var(--sage); border-radius:8px;
+    padding:12px 14px; margin-bottom:10px;
+  }
+  .entry.sem{border-left-color:var(--gold);}
+  .entry .top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;}
+  .entry .serv{font-weight:600; font-size:14px;}
+  .entry .meta{font-size:12px; color:var(--text-mute);}
+  .entry .obs{font-size:12.5px; color:var(--text-mute); margin-top:5px; font-style:italic;}
+
+  .empty-list{text-align:center; padding:30px 10px; color:var(--text-mute); font-size:13px; border:1.5px dashed var(--line); border-radius:10px;}
+
+  .day-card{background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px;}
+  .day-card.ok{border-left:3px solid var(--sage);}
+  .day-card.warn{border-left:3px solid var(--rust);}
+  .day-card .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .day-card .dname{font-weight:600; font-size:13.5px;}
+  .day-card .badge{font-size:11px; font-weight:600; padding:3px 9px; border-radius:12px;}
+  .day-card .badge.ok{background:#EEF1E8; color:var(--forest);}
+  .day-card .badge.warn{background:#F7E7E2; color:var(--rust);}
+  .day-card ul{margin:0; padding-left:18px; font-size:12.5px; color:var(--text-mute);}
+  .day-card li{margin-bottom:2px;}
+
+  .toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%); background:var(--forest); color:#fff;
+    padding:10px 18px; border-radius:14px; font-size:13px; opacity:0; transition:opacity .25s; z-index:50;
+    max-width:90%; text-align:center; white-space:normal;
+  }
+  .toast.show{opacity:1;}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(30,36,29,.55); display:none;
+    align-items:center; justify-content:center; z-index:60; padding:20px;
+  }
+  .modal-box{background:#fff; border-radius:14px; padding:20px; max-width:380px; width:100%;}
+  .modal-box p{margin:0 0 18px; font-size:14px; color:var(--text); white-space:pre-line; line-height:1.5;}
+  .modal-box .actions{display:flex; gap:10px;}
+  .modal-box button{flex:1; padding:12px; border-radius:9px; border:none; font-size:13.5px; font-weight:600; font-family:inherit;}
+  .modal-box .btn-cancel{background:#fff; border:1.5px solid var(--line); color:var(--text-mute);}
+
+  .picker-btn{
+    width:100%; padding:11px 12px; border:1.5px solid var(--line); border-radius:8px;
+    font-size:15px; font-family:inherit; background:#fff; color:var(--text); text-align:left;
+    user-select:none; -webkit-user-select:none;
+  }
+  .picker-btn:disabled{background:var(--bg); color:var(--text-mute); opacity:.75;}
+  #pickerModal .modal-box{max-height:80vh; display:flex; flex-direction:column;}
+  #pickerModalTitle{margin:0 0 12px; font-size:15px; font-weight:600; color:var(--forest);}
+  #pickerModalList{display:flex; flex-direction:column; gap:8px; overflow-y:auto; margin-bottom:14px;}
+  #pickerModalList button{
+    padding:12px; border-radius:8px; border:1.5px solid var(--line); background:#fff;
+    text-align:left; font-family:inherit; font-size:14px; color:var(--text); flex:none;
+    user-select:none; -webkit-user-select:none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="icon.jpg" alt="">
+  <div>
+    <h1>Monte de Sampaio</h1>
+    <p>Gestão — Folha de Serviço</p>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <h3>Consultar</h3>
+    <div class="field">
+      <label>Colaborador</label>
+      <button type="button" class="picker-btn" id="nomePickerBtn">Seleciona o colaborador</button>
+      <input type="hidden" id="nome">
+    </div>
+    <div class="field">
+      <label>Semana (escolhe um dia dessa semana)</label>
+      <div class="date-overlay-wrap">
+        <input type="date" id="semanaDate">
+        <div class="date-overlay" id="semanaDateOverlay"></div>
+      </div>
+      <input type="hidden" id="semana">
+    </div>
+    <button class="btn-add" id="btnConsultar">Consultar</button>
+  </div>
+
+  <h3 style="font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); margin:18px 0 10px;">Serviços lançados</h3>
+  <div id="entriesList"><div class="empty-list">Escolhe um colaborador e uma semana, depois toca em "Consultar"</div></div>
+
+  <h3 style="font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); margin:18px 0 10px;">Resumo diário</h3>
+  <div id="dailySummary"></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="pickerModal">
+  <div class="modal-box">
+    <p id="pickerModalTitle"></p>
+    <div id="pickerModalList"></div>
+    <div class="actions">
+      <button class="btn-cancel" id="pickerModalCancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const NOMES = ['Figueira','Serrado','Pedro Figueira','Rui Ribeiro','Cornel','Vânia','Natália'];
+
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbze6Bde5WYBzjXNnezXpxP_7xFWuj0XFIKlRYPscKtHWrpqFKeqmOCoQFBrDtGTJJwn/exec';
+const APPS_SCRIPT_TOKEN = 'monte-sampaio-2026';
+
+const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+// "Data" chega da folha central já em DD/MM/AAAA (é como a app dos
+// colaboradores agora envia) — para ordenar/agrupar corretamente precisamos
+// de a converter de volta para uma data real.
+function parseDataPT(s){
+  const [d,m,y] = String(s).split('/');
+  return new Date(Date.UTC(Number(y), Number(m)-1, Number(d)));
+}
+
+// Janela de escolha genérica — mesmo padrão usado na app dos colaboradores.
+function abrirPicker(titulo, opcoes, aoEscolher){
+  document.getElementById('pickerModalTitle').textContent = titulo;
+  const lista = document.getElementById('pickerModalList');
+  lista.innerHTML = opcoes.map(o => `<button type="button" data-v="${esc(o)}">${esc(o)}</button>`).join('');
+  lista.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    fecharPicker();
+    aoEscolher(btn.dataset.v);
+  }));
+  document.getElementById('pickerModal').style.display = 'flex';
+}
+function fecharPicker(){
+  document.getElementById('pickerModal').style.display = 'none';
+}
+document.getElementById('pickerModalCancel').addEventListener('click', fecharPicker);
+
+document.getElementById('nomePickerBtn').addEventListener('click', () => {
+  abrirPicker('Seleciona o colaborador', NOMES, valor => {
+    document.getElementById('nome').value = valor;
+    document.getElementById('nomePickerBtn').textContent = valor;
+  });
+});
+
+function getISOWeekString(d){
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+}
+function semanaParaDatas(weekStr){
+  const [y,w] = weekStr.split('-W').map(Number);
+  const simple = new Date(Date.UTC(y,0,1 + (w-1)*7));
+  const dow = simple.getUTCDay() || 7;
+  const monday = new Date(simple); monday.setUTCDate(simple.getUTCDate() - dow + 1);
+  const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
+  return { monday, sunday };
+}
+function weekStringToRange(weekStr){
+  if(!weekStr) return null;
+  const { monday, sunday } = semanaParaDatas(weekStr);
+  const fmt = d => d.toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit',timeZone:'UTC'});
+  return `${fmt(monday)} a ${fmt(sunday)} (Segunda a Domingo)`;
+}
+function renderSemanaRange(){
+  const semana = document.getElementById('semana').value;
+  document.getElementById('semanaDateOverlay').textContent = weekStringToRange(semana) || '';
+}
+function syncSemana(){
+  const dv = document.getElementById('semanaDate').value;
+  document.getElementById('semana').value = dv ? getISOWeekString(new Date(dv+'T00:00:00')) : '';
+  renderSemanaRange();
+}
+document.getElementById('semanaDate').valueAsDate = new Date();
+document.getElementById('semanaDate').addEventListener('change', syncSemana);
+syncSemana();
+
+// Desenha os cartões de serviço e o resumo diário a partir das linhas
+// devolvidas pela folha central — mesmo layout visual da app dos
+// colaboradores, mas sem botões de editar/apagar (é só consulta).
+// Os totais (Horas Normais/Extra) já vêm calculados da folha central,
+// não são recalculados aqui — evita contar mal as horas extra.
+function renderResultados(rows){
+  const wrapEntries = document.getElementById('entriesList');
+  const wrapSummary = document.getElementById('dailySummary');
+
+  if(!rows || rows.length === 0){
+    wrapEntries.innerHTML = `<div class="empty-list">Sem lançamentos para este colaborador nesta semana</div>`;
+    wrapSummary.innerHTML = '';
+    return;
+  }
+
+  const ordenadas = [...rows].sort((a,b) => (parseDataPT(a['Data'])-parseDataPT(b['Data'])) || String(a['Das']).localeCompare(String(b['Das'])));
+  wrapEntries.innerHTML = ordenadas.map(r => `
+    <div class="entry ${r['Tipo']==='Sem folha' ? 'sem' : ''}">
+      <div class="top"><span class="serv">${esc(r['Serviço'])}</span><span class="meta mono">${esc(r['Data'])}</span></div>
+      <div class="meta">${esc(r['Das'])}–${esc(r['Às'])}${r['Local'] ? ' · '+esc(r['Local']) : ''}${r['Equipamento'] ? ' · '+esc(r['Equipamento']) : ''}</div>
+      ${r['Obs.'] ? `<div class="obs">${esc(r['Obs.'])}</div>` : ''}
+    </div>
+  `).join('');
+
+  const porDia = new Map();
+  rows.forEach(r => {
+    const d = r['Data'];
+    if(!porDia.has(d)) porDia.set(d, { normal:0, extra:0, servicos:[] });
+    const info = porDia.get(d);
+    info.normal += Number(r['Horas Normais']) || 0;
+    info.extra += Number(r['Horas Extra']) || 0;
+    info.servicos.push(r);
+  });
+  const dates = [...porDia.keys()].sort((a,b) => parseDataPT(a)-parseDataPT(b));
+  wrapSummary.innerHTML = dates.map(dt => {
+    const info = porDia.get(dt);
+    const falta = 8 - info.normal;
+    const isOk = falta <= 0.01;
+    const dname = DIAS_SEMANA[parseDataPT(dt).getUTCDay()];
+    return `<div class="day-card ${isOk?'ok':'warn'}">
+      <div class="top">
+        <span class="dname">${dname} · <span class="mono">${dt}</span></span>
+        <span class="badge ${isOk?'ok':'warn'}">${isOk ? '✓ 8h completas' : `⚠ faltam ${falta.toFixed(1)}h`}</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-mute); margin-bottom:4px;">${info.normal.toFixed(1)}h normais${info.extra>0?` + ${info.extra.toFixed(1)}h extra`:''}</div>
+      <ul>${info.servicos.map(s=>`<li>${esc(s['Serviço'])} — ${s['Das']}–${s['Às']} · ${esc(s['Local'])}</li>`).join('')}</ul>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('btnConsultar').addEventListener('click', async () => {
+  const nome = document.getElementById('nome').value;
+  const semana = document.getElementById('semana').value;
+  if(!nome){ showToast('Escolhe o colaborador'); return; }
+  if(!semana){ showToast('Escolhe a semana'); return; }
+
+  const btn = document.getElementById('btnConsultar');
+  btn.disabled = true; btn.textContent = 'A consultar…';
+  try{
+    const url = `${APPS_SCRIPT_URL}?token=${encodeURIComponent(APPS_SCRIPT_TOKEN)}&nome=${encodeURIComponent(nome)}&semana=${encodeURIComponent(semana)}`;
+    const resp = await fetch(url);
+    const dados = await resp.json();
+    if(dados && dados.ok === false){ showToast('Erro: ' + (dados.erro || 'pedido recusado')); return; }
+    renderResultados(dados);
+  }catch(err){
+    showToast('Sem ligação à folha central — tenta novamente');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Consultar';
+  }
+});
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._tid);
+  showToast._tid = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+</script>
+
+</body>
+</html>

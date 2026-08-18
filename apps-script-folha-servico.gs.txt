@@ -1,0 +1,98 @@
+// ===================================================================
+// Apps Script "central" da Folha de Serviço — Monte de Sampaio
+//
+// O que faz:
+//  - doPost: recebe os lançamentos que um colaborador envia (a app
+//    dos colaboradores vai chamar isto) e escreve-os na folha "Dados".
+//    Se já existirem linhas desse Nome+Semana, apaga-as primeiro —
+//    reenviar a mesma semana substitui, não duplica.
+//  - doGet: recebe ?nome=X&semana=Y (a app de gestão vai chamar isto)
+//    e devolve em JSON os lançamentos correspondentes.
+//
+// Como instalar: ver instruções enviadas em separado (Extensões >
+// Apps Script na Google Sheet central, colar isto, publicar como
+// "Aplicação Web").
+// ===================================================================
+
+var SHEET_NAME = 'Dados';
+
+// Combina este valor com o que ficar na app (impede que qualquer
+// pessoa que descubra o endereço escreva lixo na folha por engano;
+// não é segurança forte, é só um travão simples).
+var TOKEN = 'monte-sampaio-2026';
+
+var CABECALHO = ['Nome','Semana','Data','Dia','Tipo','Serviço','Local','Equipamento','Das','Às','Horas Normais','Horas Extra','Total Horas','Obs.','Enviado em'];
+
+function doPost(e) {
+  try {
+    var body = JSON.parse(e.postData.contents);
+    if (body.token !== TOKEN) {
+      return jsonResponse({ ok: false, erro: 'token inválido' });
+    }
+    var sheet = getSheet_();
+    removerLinhasExistentes_(sheet, body.nome, body.semana);
+    var agora = new Date();
+    (body.rows || []).forEach(function(row) {
+      sheet.appendRow([
+        row['Nome'], row['Semana'], row['Data'], row['Dia'], row['Tipo'],
+        row['Serviço'], row['Local'], row['Equipamento'], row['Das'], row['Às'],
+        row['Horas Normais'], row['Horas Extra'], row['Total Horas'], row['Obs.'],
+        agora
+      ]);
+    });
+    return jsonResponse({ ok: true, linhas: (body.rows || []).length });
+  } catch (err) {
+    return jsonResponse({ ok: false, erro: String(err) });
+  }
+}
+
+function doGet(e) {
+  if (e.parameter.token !== TOKEN) {
+    return jsonResponse({ ok: false, erro: 'token inválido' });
+  }
+  var nome = e.parameter.nome;
+  var semana = e.parameter.semana;
+  var sheet = getSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var cab = dados[0];
+  var resultado = [];
+  for (var i = 1; i < dados.length; i++) {
+    var linha = dados[i];
+    var obj = {};
+    for (var c = 0; c < cab.length; c++) obj[cab[c]] = linha[c];
+    if ((!nome || obj['Nome'] === nome) && (!semana || String(obj['Semana']) === String(semana))) {
+      resultado.push(obj);
+    }
+  }
+  return jsonResponse(resultado);
+}
+
+function getSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.appendRow(CABECALHO);
+  }
+  // "Data" (C), "Das" (I) e "Às" (J) têm de ficar como texto simples — sem
+  // isto, o Google Sheets interpreta "2026-01-01"/"08:00" como valores de
+  // data/hora internos e devolve-os depois deformados (com desvio de fuso
+  // horário incluído) em vez do texto original.
+  sheet.getRange('C:C').setNumberFormat('@');
+  sheet.getRange('I:I').setNumberFormat('@');
+  sheet.getRange('J:J').setNumberFormat('@');
+  return sheet;
+}
+
+function removerLinhasExistentes_(sheet, nome, semana) {
+  var dados = sheet.getDataRange().getValues();
+  for (var i = dados.length - 1; i >= 1; i--) {
+    if (dados[i][0] === nome && String(dados[i][1]) === String(semana)) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
