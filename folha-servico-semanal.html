@@ -103,6 +103,9 @@
   .btn-save{background:#fff; border:1.5px solid var(--line) !important; color:var(--text-mute);}
   .btn-send{background:var(--gold); color:#3A2E08;}
   .btn-send:active{background:#b8791f;}
+  .btn-sync{background:var(--sage); color:#1E3308;}
+  .btn-sync:active{background:#77a13c;}
+  .btn-sync:disabled{opacity:.6;}
 
   .saved-week{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px;}
   .saved-week .hd{display:flex; justify-content:space-between; font-weight:600; font-size:14px; margin-bottom:6px;}
@@ -234,6 +237,7 @@
 
 <div class="footer-bar" id="footerBar">
   <button class="btn-send" id="btnSend">📤 Enviar ficheiro</button>
+  <button class="btn-sync" id="btnSync">🔄 Sincronizar</button>
   <button class="btn-save" id="btnSave">Guardar</button>
 </div>
 
@@ -310,12 +314,23 @@ const APPS_SCRIPT_TOKEN = 'monte-sampaio-2026';
 // nem atrasa a partilha do ficheiro (que tem de continuar a ser a primeira
 // coisa a acontecer depois do toque, para o telemóvel não recusar o gesto).
 // Falhas (sem rede, etc.) não interrompem o fluxo normal do colaborador.
-function sincronizarComFolhaCentral(nome, semana, rows){
-  fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ token: APPS_SCRIPT_TOKEN, nome, semana, rows })
-  }).catch(err => console.error('Sincronização com a folha central falhou:', err));
+// Devolve true/false consoante o envio correu bem — usado pelo botão
+// "Sincronizar" para dar feedback. No envio automático (dentro de
+// enviarFolha) o resultado é ignorado de propósito, por isso não é
+// preciso fazer "await" nesse caso.
+async function sincronizarComFolhaCentral(nome, semana, rows){
+  try{
+    const resp = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ token: APPS_SCRIPT_TOKEN, nome, semana, rows })
+    });
+    const dados = await resp.json();
+    return !(dados && dados.ok === false);
+  }catch(err){
+    console.error('Sincronização com a folha central falhou:', err);
+    return false;
+  }
 }
 
 // Janela de escolha genérica, usada por todos os campos de seleção da app
@@ -803,10 +818,9 @@ document.getElementById('btnSend').addEventListener('click', () => {
   enviarFolha();
 });
 
-async function enviarFolha(){
-  const nome = document.getElementById('nome').value;
-  const semana = document.getElementById('semana').value;
-
+// Partilhada entre "Enviar ficheiro" (Excel/CSV + folha central) e
+// "Sincronizar" (só folha central) — as linhas são sempre as mesmas.
+function construirLinhasEnvio(nome, semana){
   const porDia = new Map();
   entries.forEach(e => {
     if(!porDia.has(e.data)) porDia.set(e.data, []);
@@ -816,7 +830,7 @@ async function enviarFolha(){
   porDia.forEach(lista => { distribuirNormaisExtras(lista).forEach((v,k) => distribuicao.set(k, v)); });
 
   const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
-  const rows = entries.map(e => {
+  return entries.map(e => {
     const d = new Date(e.data + 'T00:00:00');
     const { normal, extra } = distribuicao.get(e);
     return {
@@ -836,6 +850,46 @@ async function enviarFolha(){
       'Obs.': e.obs
     };
   });
+}
+
+// Só sincroniza com a folha central — não gera ficheiro nem abre o menu de
+// partilha do Android. Para quem só quer confirmar que os dados chegam à
+// Google Sheet, sem passar pelo WhatsApp de cada vez.
+document.getElementById('btnSync').addEventListener('click', () => {
+  const nome = document.getElementById('nome').value;
+  const semana = document.getElementById('semana').value;
+  if(!nome){ showToast('Seleciona o colaborador'); return; }
+  if(!semana){ showToast('Indica a semana'); return; }
+  if(entries.length === 0){ showToast('Adiciona pelo menos um serviço'); return; }
+
+  const incompletos = diasIncompletos();
+  if(incompletos.length > 0){
+    const lista = incompletos.map(i => `• ${i.dt}: faltam ${i.falta.toFixed(1)}h`).join('\n');
+    showConfirmModal(`Atenção — há dias com menos de 8h registadas:\n\n${lista}\n\nContinuar mesmo assim?`, sincronizarAgora);
+    return;
+  }
+  sincronizarAgora();
+});
+
+async function sincronizarAgora(){
+  const nome = document.getElementById('nome').value;
+  const semana = document.getElementById('semana').value;
+  const rows = construirLinhasEnvio(nome, semana);
+
+  const btn = document.getElementById('btnSync');
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'A sincronizar…';
+  const ok = await sincronizarComFolhaCentral(nome, semana, rows);
+  btn.disabled = false;
+  btn.textContent = textoOriginal;
+  showToast(ok ? 'Sincronizado com a folha central ✓' : 'Falhou — sem ligação? tenta novamente');
+}
+
+async function enviarFolha(){
+  const nome = document.getElementById('nome').value;
+  const semana = document.getElementById('semana').value;
+  const rows = construirLinhasEnvio(nome, semana);
 
   sincronizarComFolhaCentral(nome, semana, rows);
 
