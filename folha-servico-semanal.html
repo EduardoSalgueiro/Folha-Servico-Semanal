@@ -686,20 +686,29 @@ ligarCampoHora(document.getElementById('horaFim'));
 
 // Fonte única de verdade: divide as entradas de um dia em horas normais/extra,
 // usada na pré-visualização, nos registos guardados e na exportação Excel.
-// Horas trabalhadas que ultrapassem 8h/dia (por ordem cronológica) contam como
-// extra, somando-se às extras escritas à mão em cada entrada.
+// As primeiras 8h do dia (por ordem cronológica) são normais. Um serviço que
+// começa já depois das 8h fica com toda a sua duração como extra dele. Se um
+// serviço atravessa as 8h, a parte acima das 8h NÃO fica só nesse serviço:
+// reparte-se por todos os serviços do dia, na proporção das horas normais de
+// cada um. As extras escritas à mão numa entrada ficam sempre nessa entrada.
 function distribuirNormaisExtras(entriesDoDia){
+  const EPS = 1e-9;
   const ordenadas = [...entriesDoDia].sort((a,b) => a.horaIni.localeCompare(b.horaIni));
-  let acumulado = 0;
+  let acumulado = 0, sobra = 0, normalTotal = 0;
   const resultado = new Map(); // entrada -> {normal, extra}
   ordenadas.forEach(e => {
     const trabalhadas = horasEntre(e.horaIni, e.horaFim);
-    const disponivelNormal = Math.max(0, 8 - acumulado);
-    const normal = Math.min(trabalhadas, disponivelNormal);
-    const extra = (trabalhadas - normal) + Number(e.extras || 0);
+    let normal = Math.min(trabalhadas, Math.max(0, 8 - acumulado));
+    if(normal < EPS) normal = 0;
+    const extraProprio = normal === 0 ? trabalhadas : 0;
+    if(normal > 0 && trabalhadas - normal > EPS) sobra += trabalhadas - normal;
+    normalTotal += normal;
     acumulado += trabalhadas;
-    resultado.set(e, { normal, extra });
+    resultado.set(e, { normal, extra: extraProprio + Number(e.extras || 0) });
   });
+  if(sobra > 0 && normalTotal > 0){
+    resultado.forEach(v => { if(v.normal > 0) v.extra += sobra * v.normal / normalTotal; });
+  }
   return resultado;
 }
 
@@ -857,10 +866,23 @@ function construirLinhasEnvio(nome, semana){
   const distribuicao = new Map();
   porDia.forEach(lista => { distribuirNormaisExtras(lista).forEach((v,k) => distribuicao.set(k, v)); });
 
+  // Extras repartidas (ex. 0,625h + 0,375h) arredondadas a 2 casas de forma a
+  // que a soma das linhas do dia continue a bater certo com o total do dia.
+  const extraArred = new Map();
+  porDia.forEach(lista => {
+    const extras = lista.map(e => distribuicao.get(e).extra);
+    const centimos = extras.map(x => Math.floor(x*100 + 1e-6));
+    let resto = Math.round(extras.reduce((s,x) => s+x, 0)*100) - centimos.reduce((s,x) => s+x, 0);
+    extras.map((x,i) => ({ i, frac: x*100 - centimos[i] })).sort((a,b) => b.frac - a.frac)
+      .forEach(({i}) => { if(resto > 0){ centimos[i]++; resto--; } });
+    lista.forEach((e,i) => extraArred.set(e, centimos[i]/100));
+  });
+
   const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   return entries.map(e => {
     const d = new Date(e.data + 'T00:00:00');
-    const { normal, extra } = distribuicao.get(e);
+    const normal = Math.round(distribuicao.get(e).normal*100)/100;
+    const extra = extraArred.get(e);
     return {
       'Nome': nome,
       'Semana': semana,
@@ -872,8 +894,8 @@ function construirLinhasEnvio(nome, semana){
       'Equipamento': e.equipamento || '',
       'Das': e.horaIni,
       'Às': e.horaFim,
-      'Horas Normais': Math.round(normal*100)/100,
-      'Horas Extra': Math.round(extra*100)/100,
+      'Horas Normais': normal,
+      'Horas Extra': extra,
       'Total Horas': Math.round((normal+extra)*100)/100,
       'Obs.': e.obs
     };
